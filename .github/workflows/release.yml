@@ -1,6 +1,7 @@
 name: Release
 
-# Manual, opt-in publish to Maven Central via the Sonatype Central Portal.
+# Manual, opt-in publish to Maven Central via the Sonatype Central Portal, with
+# release notes sourced from CHANGELOG.md.
 #
 # Required repository secrets (see TEMPLATE.md "Publishing to Maven Central"):
 #   MAVEN_CENTRAL_USERNAME  - Central Portal user token name
@@ -8,8 +9,9 @@ name: Release
 #   SIGNING_KEY             - ASCII-armored GPG private key
 #   SIGNING_PASSWORD        - passphrase for that key
 #
-# Delete this workflow (and the publishing/signing blocks in build.gradle.kts)
-# if the project is an app or internal-only library.
+# Delete this workflow (and the `com.vanniktech.maven.publish` plugin + the
+# mavenPublishing block in build.gradle.kts) if this is an app or internal-only
+# library.
 
 on:
   workflow_dispatch:
@@ -21,11 +23,18 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # git-cliff (the changelog fallback) needs full history + tags.
+          fetch-depth: 0
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -39,14 +48,51 @@ jobs:
       - name: Build and test
         run: ./gradlew build --stacktrace
 
+      # Release notes: prefer the curated CHANGELOG.md [Unreleased] section;
+      # fall back to git-cliff over commits since the last tag if it's empty.
+      - name: Extract changelog entry
+        id: changelog
+        run: |
+          notes=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
+          {
+            echo "notes<<__NOTES_EOF__"
+            echo "$notes"
+            echo "__NOTES_EOF__"
+          } >> "$GITHUB_OUTPUT"
+          # "Manual" means at least one real bullet (a "- " line with content).
+          if echo "$notes" | grep -qE '^- +\S'; then
+            echo "has_manual=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_manual=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate notes from git history (fallback)
+        if: steps.changelog.outputs.has_manual == 'false'
+        id: cliff
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --unreleased --strip all
+
+      - name: Assemble release notes
+        id: notes
+        run: |
+          if [ "${{ steps.changelog.outputs.has_manual }}" = "true" ]; then
+            printf '%s\n' "${{ steps.changelog.outputs.notes }}" > release-notes.md
+          else
+            cp "${{ steps.cliff.outputs.changelog }}" release-notes.md
+          fi
+          echo "----- release notes -----"
+          cat release-notes.md
+
       - name: Publish to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
-        # publishToMavenCentral uploads to a staging deployment you release from
-        # the Central Portal UI. Swap for publishAndReleaseToMavenCentral to auto-release.
+        # publishToMavenCentral uploads a staging deployment you release from the
+        # Central Portal UI. Swap for publishAndReleaseToMavenCentral to auto-release.
         run: ./gradlew publishToMavenCentral -Pversion=${{ github.event.inputs.version }} --stacktrace
 
       - name: Tag the release
@@ -58,6 +104,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ github.event.inputs.version }}"
-          generate_release_notes: true
+          body_path: release-notes.md
           files: |
             build/libs/*.jar

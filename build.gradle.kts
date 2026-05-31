@@ -7,6 +7,20 @@ plugins {
     // cannot). Remove it (and the `mavenPublishing` block below) for an app or
     // internal-only library.
     alias(libs.plugins.maven.publish)
+    // Public-API tracking (opt-in). Uncomment, then run `./gradlew apiDump` once
+    // and commit the generated `api/` directory. `apiCheck` then runs as part of
+    // `build` and fails on any unintended public-API change — the natural
+    // companion to explicitApi(). Left off by default so the template builds
+    // green before a baseline exists; see TEMPLATE.md "Optional pieces".
+    // alias(libs.plugins.binary.compatibility.validator)
+
+    // Code coverage (opt-in, Kover). Uncomment to add koverHtmlReport /
+    // koverVerify. Left off by default: Kover's plugin classpath can clash with
+    // the Kotlin Gradle Plugin's embedded compiler on a bleeding-edge Kotlin
+    // (e.g. 2.3), failing the build with a "Kotlin version mismatch". Enable once
+    // a Kover release that matches your Kotlin version is available; see
+    // TEMPLATE.md "Opt-in tooling".
+    // alias(libs.plugins.kover)
 }
 
 group = "__Group__"
@@ -17,13 +31,12 @@ version = providers.gradleProperty("version").getOrElse("0.1.0")
 description = "__Description__"
 
 kotlin {
-    // Compile and run on JDK 25. Gradle provisions the toolchain, so the build
-    // does not depend on whatever JDK happens to be on PATH.
-    //
-    // Note: Kotlin currently emits JVM 24 bytecode as its max target, so under a
-    // JDK 25 toolchain the first compile prints an informational
-    // "falling back to Kotlin JVM_24 JVM target" warning. It is not an error and
-    // disappears once Kotlin ships a JVM 25 target.
+    // Build and target JDK 25. Gradle provisions the toolchain via the foojay
+    // resolver (settings.gradle.kts) when it isn't installed locally, so the
+    // build doesn't depend on whatever JDK happens to be on PATH. Both the Kotlin
+    // and Java tasks target 25, so the published artifact requires a JDK 25+
+    // runtime — lower jvmToolchain(...) to support older JREs (and update the
+    // README requirements to match).
     jvmToolchain(25)
 
     // Explicit API mode (strict): every public declaration must spell out its

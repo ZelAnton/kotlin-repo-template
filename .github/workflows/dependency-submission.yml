@@ -1,0 +1,31 @@
+name: Dependency submission
+
+# Submits the resolved Gradle dependency graph to GitHub's Dependency Graph, so
+# Dependabot security alerts cover transitive dependencies too (not just the
+# direct ones declared in gradle/libs.versions.toml).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dependency-submission-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Submit dependency graph
+        uses: gradle/actions/dependency-submission@v4

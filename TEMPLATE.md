@@ -78,11 +78,18 @@ pipeline, and conventions for agents in [CLAUDE.md](CLAUDE.md) /
   `org.jlleitschuh.gradle.ktlint` plugin and checked in CI.
 - **JUnit 5 (Jupiter)** is the test framework, wired via a BOM and
   `useJUnitPlatform()`.
-- **No CodeQL by default.** GitHub CodeQL supports Kotlin via its `java-kotlin`
-  analysis; a ready-to-enable `codeql.yml` is included but you may delete it.
-  CI otherwise relies on warnings-as-errors + ktlint + Dependabot.
-- **Targets JDK 25** through the Gradle toolchain (`jvmToolchain(25)`); requires
-  Kotlin 2.3+, which is the first release with JDK 25 support.
+- **CodeQL is enabled.** GitHub CodeQL supports Kotlin via its `java-kotlin`
+  analysis; `codeql.yml` is included (delete it if unwanted). CI otherwise relies
+  on warnings-as-errors + ktlint + Dependabot.
+- **Builds on and targets JDK 25.** The Gradle toolchain (`jvmToolchain(25)`)
+  uses Kotlin 2.3+ for the latest compiler and emits JVM 25 bytecode, so the
+  published artifact needs a JDK 25+ runtime — lower `jvmToolchain(...)` to an LTS
+  (17/21) for wider reach. The JDK 25 toolchain is downloaded automatically via
+  the **foojay resolver** (`settings.gradle.kts`) when it isn't installed locally.
+- **Coverage via Kover** (`org.jetbrains.kotlinx.kover`): `./gradlew koverHtmlReport`.
+- **Dependency graph submission.** `.github/workflows/dependency-submission.yml`
+  feeds the resolved Gradle graph to GitHub so Dependabot alerts cover transitive
+  dependencies too.
 
 ## Publishing to Maven Central
 
@@ -106,6 +113,28 @@ Central Portal (e.g. `io.github.<owner>` is verifiable via your GitHub account).
   alias (in `build.gradle.kts` and `gradle/libs.versions.toml`), and the
   `mavenPublishing { }` block in `build.gradle.kts`. Keep CI.
 - **CodeQL** — delete `.github/workflows/codeql.yml` if you don't want it.
+
+## Opt-in tooling (wired but not enabled)
+
+These are pre-declared in `gradle/libs.versions.toml` so enabling them is a
+one-liner; left off by default to keep the out-of-the-box `./gradlew build` fast
+and green.
+
+- **Binary Compatibility Validator** — the natural companion to `explicitApi()`:
+  it records the public ABI in `api/*.api` and fails the build on an unintended
+  change. Enable by uncommenting the
+  `alias(libs.plugins.binary.compatibility.validator)` line in `build.gradle.kts`,
+  then run `./gradlew apiDump` once and commit the generated `api/` directory.
+  (It's off by default because `apiCheck` fails until that baseline exists, and a
+  tokenized baseline can't be committed cleanly before `init`.)
+- **detekt** — static analysis for code smells and complexity (ktlint only covers
+  formatting). Add `detekt = "<latest>"` + a plugin alias to the catalog and apply
+  `io.gitlab.arturbosch.detekt`. The current stable detekt targets an older Kotlin;
+  confirm a build that supports Kotlin 2.3 before enabling.
+- **Dokka** — real API docs in the published `-javadoc` jar (the default is an
+  empty javadoc jar). Apply `org.jetbrains.dokka` and switch the publishing
+  `configure(...)` call to `JavadocJar.Dokka("dokkaHtml")` as noted in
+  `build.gradle.kts`.
 
 ## Post-setup checklist
 

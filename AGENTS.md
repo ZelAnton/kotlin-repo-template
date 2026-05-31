@@ -27,6 +27,7 @@ system `gradle` — so the build always runs against the pinned version.
 | One test | `./gradlew test --tests "__PackageName__.GreeterTest"` |
 | Lint | `./gradlew ktlintCheck` |
 | Auto-format | `./gradlew ktlintFormat` |
+| Coverage report | `./gradlew koverHtmlReport` |
 | Publish locally | `./gradlew publishToMavenLocal` |
 
 The build is **warnings-as-errors** (`allWarningsAsErrors = true`) and runs
@@ -35,12 +36,18 @@ build; fix it rather than suppressing it.
 
 ## Toolchain
 
-- **Kotlin 2.3+**, **Gradle 9.5** (wrapper), **JDK 25** via the Gradle toolchain
-  (`jvmToolchain(25)`). The toolchain means the build does not depend on the JDK
-  on `PATH` — Gradle provisions a matching one.
-- Kotlin currently maxes out at the **JVM 24** bytecode target, so on JDK 25 the
-  compiler prints "falling back to Kotlin JVM_24 JVM target". This is expected;
-  do not lower the toolchain to silence it.
+- **Kotlin 2.3+**, **Gradle 9.5** (wrapper), **JDK 25** toolchain
+  (`jvmToolchain(25)`) — the build both compiles on and targets JVM 25, so the
+  published artifact needs a JDK 25+ runtime. The toolchain means the build does
+  not depend on the JDK on `PATH`: the **foojay resolver** (`settings.gradle.kts`)
+  downloads a matching JDK when one isn't installed.
+- To target an older runtime, lower `jvmToolchain(...)` to an LTS (17/21). If you
+  want a recent toolchain but older bytecode, set the Kotlin `jvmTarget` **and**
+  the Java source/target compatibility to the same version — Gradle fails the
+  build if the Kotlin and Java JVM targets disagree.
+- Opt-in tooling (declared in the catalog, off by default — see TEMPLATE.md):
+  **Kover** coverage and the **Binary Compatibility Validator** that pairs with
+  `explicitApi()` to guard the public ABI.
 
 ## Code style
 
@@ -101,8 +108,10 @@ auto-filled from commit subjects by git-cliff (`cliff.toml`); manual entries win
 
 GitHub **CodeQL supports Kotlin** through its `java-kotlin` pack. A `codeql.yml`
 workflow is included and ready to run; treat new alerts like build warnings.
-Delete it if you don't want CodeQL. Keep Dependabot
-(`.github/dependabot.yml`) for dependency and Action updates either way.
+Delete it if you don't want CodeQL. Keep Dependabot (`.github/dependabot.yml`)
+for dependency and Action updates, and the dependency-submission workflow
+(`.github/workflows/dependency-submission.yml`) so security alerts also cover
+transitive dependencies.
 
 ## Version control workflow
 

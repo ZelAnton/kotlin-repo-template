@@ -9,8 +9,11 @@ __Description__
 
 ## Requirements
 
-- JDK 17 or later to run; the build provisions and targets **JDK 25** via the
-  Gradle toolchain. Kotlin **2.3**, Gradle **9.5** (via the wrapper).
+- **JDK 25 or later** to *use* this library: the build targets JVM 25 bytecode.
+  Lower `jvmToolchain(...)` in `build.gradle.kts` to support older JREs.
+- Building from source: nothing but the repo — the Gradle wrapper provisions
+  Gradle **9.5**, and the **JDK 25** toolchain is downloaded automatically (via
+  the foojay resolver) if it isn't already installed. Kotlin **2.3**.
 
 ## Installation
 
@@ -37,6 +40,7 @@ TODO: replace the placeholder API above and document the real public surface.
 ```sh
 ./gradlew build          # compile, test, lint
 ./gradlew ktlintFormat   # auto-fix formatting
+./gradlew koverHtmlReport # coverage → build/reports/kover/html/index.html
 ```
 
 ## Changelog

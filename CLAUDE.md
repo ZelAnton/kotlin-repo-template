@@ -28,6 +28,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew ktlintCheck
 ./gradlew ktlintFormat
 
+# Code coverage report (Kover) → build/reports/kover/html/index.html
+./gradlew koverHtmlReport
+
 # Publish to the local Maven repository for manual consumption.
 ./gradlew publishToMavenLocal
 ```
@@ -64,13 +67,19 @@ rather than a library.
 fix it rather than suppressing it, and reserve `@Suppress` for cases with a
 written justification.
 
-### JDK 25 toolchain note
+### Toolchain
 
-The build targets a JDK 25 toolchain (`jvmToolchain(25)`). Kotlin's maximum
-bytecode target is currently JVM 24, so the compiler emits an informational
-"falling back to Kotlin JVM_24 JVM target" message on JDK 25. This is expected,
-not an error, and goes away when Kotlin ships a JVM 25 target. Do not "fix" it by
-lowering the toolchain.
+The build runs on (and targets) a **JDK 25 toolchain** (`jvmToolchain(25)`), so
+the published artifact requires a JDK 25+ runtime. The toolchain decouples the
+build from whatever JDK is on `PATH`: the **foojay resolver** (applied in
+`settings.gradle.kts`) downloads a matching JDK 25 when it isn't already
+installed, so a fresh checkout builds with no manual JDK setup.
+
+To support older runtimes, lower `jvmToolchain(...)` to an LTS (17 or 21) and
+update the README requirements to match. If you instead want a recent toolchain
+but older bytecode, set `compilerOptions { jvmTarget = ... }` **and** the Java
+`sourceCompatibility`/`targetCompatibility` to the same version — Gradle fails
+the build if the Kotlin and Java targets disagree.
 
 ### Exception-handling style
 
