@@ -1,0 +1,13 @@
+{
+	"permissions": {
+		"allow": [
+			"Bash(./gradlew build*)",
+			"Bash(./gradlew test*)",
+			"Bash(./gradlew check*)",
+			"Bash(./gradlew ktlintCheck*)",
+			"Bash(./gradlew ktlintFormat*)",
+			"Bash(./gradlew assemble*)",
+			"Bash(./gradlew publishToMavenLocal*)"
+		]
+	}
+}

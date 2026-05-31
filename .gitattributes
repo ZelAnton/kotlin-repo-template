@@ -1,0 +1,31 @@
+# Default: normalize line endings to LF in the repository. Keeps git and the
+# colocated `jj` agreeing on the working copy, especially on Windows.
+* text=auto eol=lf
+
+# Kotlin / Kotlin-script and Gradle files are LF.
+*.kt   text eol=lf
+*.kts  text eol=lf
+
+# The Gradle wrapper: the POSIX launcher must stay LF and executable; the
+# Windows launcher must be CRLF or cmd.exe won't parse it.
+gradlew      text eol=lf
+*.bat        text eol=crlf
+*.cmd        text eol=crlf
+
+# The wrapper jar is binary — never touch it.
+gradle-wrapper.jar binary
+
+# PowerShell scripts work with both, but keep LF consistent with the repo default.
+*.ps1  text eol=lf
+*.psm1 text eol=lf
+*.psd1 text eol=lf
+
+# Shell scripts must always be LF — required for execution on Unix.
+*.sh   text eol=lf
+
+# Binary assets — never touch.
+*.jar  binary
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary

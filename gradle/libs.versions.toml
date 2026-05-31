@@ -1,0 +1,33 @@
+# Gradle version catalog — the single place every dependency and plugin version
+# is declared (the Kotlin analogue of .NET Central Package Management). Build
+# scripts reference these as `libs.<alias>` / `libs.plugins.<alias>`.
+#
+# This is NOT a fixed allow-list — add the production and test dependencies your
+# project actually needs. The entries below are only the template's own stack
+# (Kotlin, the JUnit 5 test runner, and ktlint) and can be changed or removed.
+
+[versions]
+# Kotlin 2.3 is the first release with JDK 25 support; on 2.2 the compiler
+# silently falls back to the JVM 24 bytecode target under a JDK 25 toolchain.
+kotlin = "2.3.21"
+# JUnit 6 (Jupiter) requires Java 17+ — fine here, the toolchain is JDK 25.
+junit = "6.1.0"
+# ktlint-gradle 14.0.1+ fixed worker launching under a JDK 25 toolchain whose
+# path contains spaces (e.g. C:\Program Files\...); do not pin below 14.
+ktlint-plugin = "14.2.0"
+# Maven Central publishing. Plain `maven-publish` cannot talk to the Sonatype
+# Central Portal (the only path since OSSRH shut down); this plugin can. 0.34+
+# supports Gradle 9.
+maven-publish-plugin = "0.36.0"
+
+[libraries]
+# JUnit BOM — aligns every junit-* artifact to one version; the dependencies
+# below are declared without their own version.
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-plugin" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish-plugin" }
