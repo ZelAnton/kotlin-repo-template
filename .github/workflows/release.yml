@@ -12,6 +12,17 @@ name: Release
 # Delete this workflow (and the `com.vanniktech.maven.publish` plugin + the
 # mavenPublishing block in build.gradle.kts) if this is an app or internal-only
 # library.
+#
+# Step ordering is deliberate and resilient to interrupted runs:
+#   preflight secrets -> build/test -> validate publication (no upload)
+#     -> PUBLISH (the single irreversible step, the pivot)
+#     -> tag/push (idempotent) -> GitHub Release (idempotent)
+# Nothing reaches the registry, a tag, or a Release before the pivot, so any
+# pre-pivot failure leaves no trace and the run is safe to retry. Because the
+# version is an explicit `workflow_dispatch` input (never auto-bumped), re-running
+# the whole workflow after a partial failure is also safe: it cannot skip or
+# orphan a version number — publish treats "already published" as success, the
+# tag step is idempotent, and the Release step upserts.
 
 on:
   workflow_dispatch:
@@ -23,6 +34,13 @@ on:
 permissions:
   contents: write
 
+# Serialise runs for the same version so two dispatches can't race on the upload
+# or the tag. cancel-in-progress is false on purpose: a run that has reached the
+# irreversible publish must never be killed mid-flight — let it finish.
+concurrency:
+  group: release-${{ github.event.inputs.version }}
+  cancel-in-progress: false
+
 defaults:
   run:
     shell: bash
@@ -31,6 +49,37 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Preflight — version + required secrets
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+          VERSION: ${{ github.event.inputs.version }}
+        # Fail fast and loud if the version is malformed or a publish secret is
+        # missing — before the build, the upload, or any tag/Release. Missing
+        # credentials must never first surface *after* something irreversible has
+        # happened. Validating the version here also neutralises shell injection:
+        # the input is threaded into gradle args, a git tag, and the Release name,
+        # so confining it to a safe charset at the source keeps every later use safe.
+        run: |
+          if ! printf '%s' "$VERSION" | grep -qE '^[0-9][0-9A-Za-z.+-]*$'; then
+            echo "Invalid version '$VERSION'. Expected a plain version like 1.2.0" >&2
+            echo "(digits/letters/dot/plus/hyphen only, no leading v)." >&2
+            exit 1
+          fi
+          missing=()
+          [ -n "$MAVEN_CENTRAL_USERNAME" ] || missing+=(MAVEN_CENTRAL_USERNAME)
+          [ -n "$MAVEN_CENTRAL_PASSWORD" ] || missing+=(MAVEN_CENTRAL_PASSWORD)
+          [ -n "$SIGNING_KEY" ] || missing+=(SIGNING_KEY)
+          [ -n "$SIGNING_PASSWORD" ] || missing+=(SIGNING_PASSWORD)
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "Missing required repository secret(s): ${missing[*]}" >&2
+            echo 'See TEMPLATE.md "Publishing to Maven Central".' >&2
+            exit 1
+          fi
+          echo "All required secrets present."
+
       - uses: actions/checkout@v4
         with:
           # git-cliff (the changelog fallback) needs full history + tags.
@@ -48,8 +97,21 @@ jobs:
       - name: Build and test
         run: ./gradlew build --stacktrace
 
+      # Cheap pre-pivot check: assemble + sign the jar / sources / javadoc / POM
+      # into the local Maven repo, exactly as the real publisher will, but without
+      # uploading. Packaging, POM-metadata, and signing errors surface here —
+      # before the irreversible upload spends a release attempt, not after.
+      - name: Validate publication (no upload)
+        env:
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: ./gradlew publishToMavenLocal -Pversion="$VERSION" --stacktrace
+
       # Release notes: prefer the curated CHANGELOG.md [Unreleased] section;
       # fall back to git-cliff over commits since the last tag if it's empty.
+      # Written to the runner temp dir (never the working tree) so the publish
+      # step can't see a dirty checkout and the file can't leak into an artifact.
       - name: Extract changelog entry
         id: changelog
         run: |
@@ -76,34 +138,98 @@ jobs:
 
       - name: Assemble release notes
         id: notes
+        # Free-form values arrive via env (never inlined into the script): changelog
+        # text can contain quotes / backticks / $(...) that would otherwise break the
+        # shell or execute as command substitution.
+        env:
+          HAS_MANUAL: ${{ steps.changelog.outputs.has_manual }}
+          MANUAL_NOTES: ${{ steps.changelog.outputs.notes }}
+          CLIFF_FILE: ${{ steps.cliff.outputs.changelog }}
         run: |
-          if [ "${{ steps.changelog.outputs.has_manual }}" = "true" ]; then
-            printf '%s\n' "${{ steps.changelog.outputs.notes }}" > release-notes.md
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          if [ "$HAS_MANUAL" = "true" ]; then
+            printf '%s\n' "$MANUAL_NOTES" > "$notes_file"
           else
-            cp "${{ steps.cliff.outputs.changelog }}" release-notes.md
+            cp "$CLIFF_FILE" "$notes_file"
           fi
+          echo "path=$notes_file" >> "$GITHUB_OUTPUT"
           echo "----- release notes -----"
-          cat release-notes.md
+          cat "$notes_file"
 
+      # ── PIVOT: the single irreversible step ─────────────────────────────────
+      # Everything above is reversible (nothing left the runner). Everything below
+      # is idempotent. Retries absorb transient registry/network failures; a
+      # version already published upstream (a prior run that uploaded but failed
+      # before tagging) is treated as success so the run can carry on to tag/Release.
+      #
+      # NOTE: publishToMavenCentral uploads a *staging* deployment you release from
+      # the Central Portal UI (so re-staging is cheap). Swap for
+      # publishAndReleaseToMavenCentral to auto-release — which makes this step
+      # genuinely irreversible and makes the "already published" handling load-bearing.
       - name: Publish to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
-        # publishToMavenCentral uploads a staging deployment you release from the
-        # Central Portal UI. Swap for publishAndReleaseToMavenCentral to auto-release.
-        run: ./gradlew publishToMavenCentral -Pversion=${{ github.event.inputs.version }} --stacktrace
-
-      - name: Tag the release
+          VERSION: ${{ github.event.inputs.version }}
         run: |
-          git tag "v${{ github.event.inputs.version }}"
-          git push origin "v${{ github.event.inputs.version }}"
+          set -o pipefail
+          log="$RUNNER_TEMP/publish.log"
+          for attempt in 1 2 3; do
+            echo "::group::Publish attempt $attempt"
+            if ./gradlew publishToMavenCentral -Pversion="$VERSION" --stacktrace 2>&1 | tee "$log"; then
+              echo "::endgroup::"
+              exit 0
+            fi
+            echo "::endgroup::"
+            # Narrowly treat "this version is already published" as success: a prior
+            # run uploaded it but failed before tagging, so re-running must converge,
+            # not loop. VERIFY this pattern against the actual Central Portal error
+            # text before relying on it — it must match the registry's real
+            # duplicate-version phrasing and must NOT match an unrelated "already
+            # exists" (matching too broadly would tag an unpublished version).
+            # Deliberately narrow: requires version/publish context, not a bare
+            # "already exists" (which fires on unrelated file/cache messages).
+            if grep -qiE 'already been (published|released)|version .*already (exists|published|released)' "$log"; then
+              echo "Version $VERSION already published upstream; treating as success."
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              wait=$((attempt * 30))
+              echo "Publish attempt $attempt failed; retrying in ${wait}s..."
+              sleep "$wait"
+            fi
+          done
+          echo "Publish failed after 3 attempts." >&2
+          exit 1
 
+      # ── Post-pivot: reversible, idempotent steps only ───────────────────────
+      - name: Tag the release
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        # Single-ref push is atomic on its own. Idempotent: if a prior run already
+        # pushed this tag (published, then failed downstream), confirm and move on
+        # rather than failing on "tag already exists".
+        run: |
+          tag="v$VERSION"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists on origin; skipping."
+            exit 0
+          fi
+          git tag "$tag"
+          git push origin "$tag"
+
+      # softprops/action-gh-release upserts: it creates the Release or updates the
+      # existing one for this tag, so a re-run never fails here. If this step (and
+      # only this step) ever fails for good, the artifact is ALREADY published and
+      # the tag is ALREADY pushed — re-running the whole workflow is safe (the
+      # version is a fixed input, so nothing gets skipped or orphaned); you may
+      # instead just publish the Release by hand from the pushed tag.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ github.event.inputs.version }}"
-          body_path: release-notes.md
+          body_path: ${{ steps.notes.outputs.path }}
           files: |
             build/libs/*.jar
