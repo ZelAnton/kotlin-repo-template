@@ -22,6 +22,16 @@ ktlint_code_style = intellij_idea
 # template — enable it per-project if you want enforced docs.
 ktlint_standard_kdoc = disabled
 
+# >>> template-only:ktlint-placeholder (scripts/init.* strip this block)
+# The sample sources ship under src/{main,test}/kotlin/__PackageName__/ with
+# `package __PackageName__`. ktlint's package-name rule rejects the underscores in
+# that placeholder token, which would otherwise fail the template's own CI. The
+# init script moves these files into the real dotted package and deletes this
+# block, after which the rule applies normally to your code.
+[src/{main,test}/kotlin/__PackageName__/*.kt]
+ktlint_standard_package-name = disabled
+# <<< template-only:ktlint-placeholder
+
 # Windows batch files (gradlew.bat) need CRLF — cmd.exe won't parse them otherwise.
 [*.{bat,cmd}]
 end_of_line = crlf

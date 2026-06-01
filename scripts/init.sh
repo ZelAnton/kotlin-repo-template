@@ -166,6 +166,18 @@ fi
 rm -f "$repo_root/TEMPLATE.md" "$repo_root/docs/AGENT-INIT-GUIDE.md"
 rmdir "$repo_root/docs" 2>/dev/null || true
 
+# Strip the template-only ktlint exemption from .editorconfig. It disables the
+# package-name rule for the placeholder package directory, which no longer exists
+# after the move in step 2, so the rule now applies to the real package. cat -s
+# collapses the blank line left behind by the range delete.
+if [ -f "$repo_root/.editorconfig" ]; then
+  tmp="$(mktemp)"
+  sed '/# >>> template-only:ktlint-placeholder/,/# <<< template-only:ktlint-placeholder/d' \
+    "$repo_root/.editorconfig" | cat -s > "$tmp"
+  mv "$tmp" "$repo_root/.editorconfig"
+  echo "    Removed template-only ktlint exemption from .editorconfig"
+fi
+
 echo ""
 echo "Done. Next steps:"
 echo "  1. ./gradlew build"

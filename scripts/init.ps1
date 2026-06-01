@@ -197,6 +197,19 @@ if ((Test-Path $docsDir) -and -not (Get-ChildItem -LiteralPath $docsDir -Force))
     Remove-Item -LiteralPath $docsDir -Force
 }
 
+# Strip the template-only ktlint exemption from .editorconfig. It disables the
+# package-name rule for the placeholder package directory, which no longer exists
+# after the move in step 2, so the rule now applies to the real package.
+$editorConfig = Join-Path $repoRoot '.editorconfig'
+if (Test-Path $editorConfig) {
+    $ecText = [System.IO.File]::ReadAllText($editorConfig)
+    $ecNew = [regex]::Replace($ecText, '(?s)\r?\n# >>> template-only:ktlint-placeholder.*?# <<< template-only:ktlint-placeholder\r?\n', '')
+    if ($ecNew -ne $ecText) {
+        [System.IO.File]::WriteAllText($editorConfig, $ecNew, (New-Object System.Text.UTF8Encoding($false)))
+        Write-Host "    Removed template-only ktlint exemption from .editorconfig" -ForegroundColor DarkGray
+    }
+}
+
 Write-Host ""
 Write-Host "Done. Next steps:" -ForegroundColor Green
 Write-Host "  1. ./gradlew build"
