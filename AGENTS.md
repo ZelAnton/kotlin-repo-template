@@ -108,7 +108,13 @@ auto-filled from commit subjects by git-cliff (`cliff.toml`); manual entries win
 
 GitHub **CodeQL supports Kotlin** through its `java-kotlin` pack. A `codeql.yml`
 workflow is included and ready to run; treat new alerts like build warnings.
-Delete it if you don't want CodeQL. Keep Dependabot (`.github/dependabot.yml`)
+CodeQL's Kotlin extractor lags new Kotlin releases, so a freshly bumped Kotlin
+can be rejected with *"no source code seen during build"*. `codeql.yml` works
+around this by raising `CODEQL_EXTRACTOR_KOTLIN_OVERRIDE_MAXIMUM_VERSION_LIMIT`
+to the catalog's Kotlin version (safe across patch bumps); if a Kotlin *minor*
+ever breaks extraction outright, delete the workflow until CodeQL adds support
+or pin Kotlin to a supported release for CI. Delete it if you don't want CodeQL.
+Keep Dependabot (`.github/dependabot.yml`)
 for dependency and Action updates, and the dependency-submission workflow
 (`.github/workflows/dependency-submission.yml`) so security alerts also cover
 transitive dependencies.
