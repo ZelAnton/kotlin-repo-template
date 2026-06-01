@@ -80,7 +80,7 @@ jobs:
           fi
           echo "All required secrets present."
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # git-cliff (the changelog fallback) needs full history + tags.
           fetch-depth: 0
