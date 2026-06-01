@@ -31,7 +31,7 @@ jobs:
           java-version: '25'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # CodeQL's Kotlin extractor caps the Kotlin versions it will analyse and
       # lags new Kotlin releases by weeks: a Kotlin even one patch newer than the
