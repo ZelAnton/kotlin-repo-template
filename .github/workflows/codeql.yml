@@ -53,7 +53,7 @@ jobs:
 
       # GitHub CodeQL analyses Kotlin through its java-kotlin pack.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
           queries: security-and-quality
@@ -66,6 +66,6 @@ jobs:
         run: ./gradlew assemble --no-build-cache --stacktrace
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:java-kotlin"
