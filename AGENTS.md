@@ -9,6 +9,44 @@ to it.
 > `__Description__`, `__Year__`) that `scripts/init.ps1` stamps in. After
 > initialization, fill the **Project** section below.
 
+## Agent instructions are local-only in this (generated) repo
+
+`CLAUDE.md`, `AGENTS.md`, and `.claude/` — plus any other agent-instruction files
+you add later (e.g. `.cursorrules`, `.github/copilot-instructions.md`) — are
+guidance for whoever, human or agent, works in this checkout, not project source.
+In a repo **generated from the template** they should be **untracked and
+git-ignored** so they stay on disk for tooling but never reach the remote; each
+developer keeps their own. (This is downstream only — the *template* repo keeps
+them tracked and shared. If you are reading this in the template itself, leave
+them tracked.)
+
+`scripts/init.ps1` does **not** change tracking — this is a **by-hand step.** If
+it has not been done yet in this repo, do it **before the first push**:
+
+- `CLAUDE.md` / `AGENTS.md` — keep the rule local (never pushed, no filename trace
+  in the remote) via `.git/info/exclude`, then drop them from the index:
+
+  ```sh
+  printf '/CLAUDE.md\n/AGENTS.md\n' >> .git/info/exclude
+  git rm --cached CLAUDE.md AGENTS.md          # jj: jj file untrack CLAUDE.md AGENTS.md
+  ```
+
+- `.claude/` — the committed `.gitignore` force-ships `settings.json`
+  (`!.claude/settings.json`), and that negation outranks `.git/info/exclude`, so a
+  local exclude can't hide it. **Delete** the `!.claude/settings.json` /
+  `!.claude/settings.json.template` lines from `.gitignore` (then `.claude/*`
+  ignores the whole directory) and untrack it:
+
+  ```sh
+  git rm -r --cached .claude                   # jj: jj file untrack .claude
+  ```
+
+`jj file untrack` only accepts already-ignored paths, so add the ignore rule
+first. Untracking stops these files going *forward* — a repo made via *Use this
+template* still has them in its initial commit on the remote (they survive in
+history); for a clean slate, copy into a fresh `git init` and untrack before the
+first commit. To keep them shared instead, do nothing here.
+
 ## Project
 
 > **Fill this in.** One paragraph on what `__ProjectName__` does, its public

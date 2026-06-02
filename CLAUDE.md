@@ -130,6 +130,17 @@ Central Portal). See TEMPLATE.md "Publishing to Maven Central" for the required
 secrets (`MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `SIGNING_KEY`,
 `SIGNING_PASSWORD`).
 
+## Agent instruction files (in repos created from this template)
+
+This applies to a repo **created from this template**, not the template itself
+(here `CLAUDE.md`, `AGENTS.md`, and `.claude/` stay tracked and pushed).
+Downstream, keep those files — and any other agent-instruction files (e.g.
+`.cursorrules`, `.github/copilot-instructions.md`) — **git-ignored and
+untracked** so they stay on disk for tooling but never reach the remote. It is a
+by-hand step (`init` does not change tracking), done before the first push. For
+the recipe, see the "Agent instructions are local-only in this (generated) repo"
+section of [AGENTS.md](AGENTS.md).
+
 ## Version control workflow
 
 The repo is colocated git + [jujutsu (`jj`)](https://jj-vcs.github.io/jj/); use

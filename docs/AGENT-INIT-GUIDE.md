@@ -15,6 +15,9 @@ deleted from downstream repos by the init script).
    the build.
 3. **Verify with `./gradlew build`** (the wrapper, not a system `gradle`).
 4. **Use the wrapper.** First run downloads the Gradle distribution; let it.
+5. **Make agent instructions local.** After init, untrack `CLAUDE.md`,
+   `AGENTS.md`, and `.claude/` in the new repo so they don't push to its remote
+   (see "Make agent instructions local in the new repo" below).
 
 ## What the template actually is
 
@@ -69,6 +72,36 @@ bash ./scripts/init.sh --project-name acme-widgets --package-name com.acme.widge
 
 Then replace `greet` with the real API, update the test, fill the Architecture
 section of CLAUDE.md, and commit.
+
+## Make agent instructions local in the new repo
+
+In the repo you create from this template, `CLAUDE.md` / `AGENTS.md` / `.claude/`
+— and any other agent-instruction files you add later (e.g. `.cursorrules`,
+`.github/copilot-instructions.md`) — are **your local agent instructions**.
+Untrack them after init so they stay on disk but never reach that repo's remote.
+(This is about the **downstream** repo; the template repo itself keeps these
+tracked and shared.) `init` does **not** change tracking — this is a **by-hand
+step.** A `.gitignore` rule won't untrack already-committed files — add a
+local-only ignore (not pushed, honoured by `jj` too) and drop them from the
+index:
+
+```sh
+printf '/CLAUDE.md\n/AGENTS.md\n' >> .git/info/exclude
+git rm --cached CLAUDE.md AGENTS.md          # jj: jj file untrack CLAUDE.md AGENTS.md
+git commit -m "Keep agent instructions local"
+```
+
+`.claude/` needs an extra step: the committed `.gitignore` force-ships
+`settings.json` / `settings.json.template`, and that negation outranks
+`.git/info/exclude`, so a local exclude can't hide them. See TEMPLATE.md "Make
+agent instructions local in the new repo" → "`.claude/`" for the `.gitignore`
+edit that takes the whole directory local.
+
+Do this **before the first push** (a repo made via *Use this template* still
+keeps these files in its initial commit's history). `init` deletes this guide and
+TEMPLATE.md, so the surviving copy of this recipe downstream is the
+"Agent instructions are local-only in this (generated) repo" section in
+`AGENTS.md` — that is the one to consult after init or on the by-hand path.
 
 ## Tooling discipline
 

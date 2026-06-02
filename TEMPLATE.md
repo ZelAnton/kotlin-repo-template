@@ -49,6 +49,78 @@ pipeline, and conventions for agents in [CLAUDE.md](CLAUDE.md) /
 4. Replace the placeholder `greet` function in `src/main/kotlin/...` with your
    real API and update the sample test.
 
+## Make agent instructions local in the new repo (init step)
+
+> **Scope.** This applies to the repository you **create from** this template,
+> not to the template repo itself. In the template, `CLAUDE.md`, `AGENTS.md`, and
+> `.claude/` stay **tracked and pushed** — they are the shared source the template
+> distributes. The step below runs **once, in the downstream repo, after init.**
+
+**Agent instruction:** when you initialize a new project from this template,
+treat `CLAUDE.md`, `AGENTS.md`, `.claude/` — and any other agent-instruction
+files you add later (e.g. `.cursorrules`, `.github/copilot-instructions.md`) — as
+**local-only agent instructions**. After running `init`, untrack them so they
+stay on disk for your tooling but never reach that repo's remote on a
+commit/push. `init` does **not** change tracking; this is a **by-hand step**, so
+do it before the first push.
+
+A `.gitignore` entry alone won't do it: these files are **already tracked** (the
+template ships them, and GitHub's *Use this template* commits them), and git
+ignores `.gitignore` rules for paths it already tracks. You must both (1) stop
+tracking a file and (2) add a **local-only** ignore — `.git/info/exclude`, which
+lives in your clone and is **never pushed** (unlike `.gitignore`, which is itself
+committed) — so it doesn't reappear as untracked and get re-added by accident.
+The trade-off: `.git/info/exclude` is per-clone, so a fresh clone re-tracks these
+files and you re-apply the steps. A colocated `jj` honours `.git/info/exclude`
+too, but `jj file untrack` only accepts a path that is *already* ignored — so the
+exclude (step 1) must come first.
+
+### `CLAUDE.md` and `AGENTS.md`
+
+These untrack cleanly with a local-only ignore:
+
+```sh
+# 1) Local-only ignore (not pushed).
+printf '/CLAUDE.md\n/AGENTS.md\n' >> .git/info/exclude
+# PowerShell: Add-Content .git/info/exclude '/CLAUDE.md', '/AGENTS.md'
+
+# 2) Stop tracking the committed copies (kept on disk), then commit the removal.
+git rm --cached CLAUDE.md AGENTS.md           # jj: jj file untrack CLAUDE.md AGENTS.md
+git commit -m "Keep agent instructions local"
+```
+
+### `.claude/`
+
+`.claude/` is a special case where a local-only exclude is **not enough**. The
+committed `.gitignore` already ignores everything under `.claude/` *except*
+`settings.json` and `settings.json.template`, which it **deliberately
+force-ships** (`!.claude/settings.json`). A committed `.gitignore` negation
+outranks `.git/info/exclude`, so adding `/.claude/` to the exclude does nothing
+for those two files — they stay tracked, and after a bare `git rm --cached` they
+re-surface as untracked (and `jj file untrack` refuses them outright, since they
+aren't ignored).
+
+To take `.claude/` fully local, **delete** the `!.claude/settings.json` and
+`!.claude/settings.json.template` lines from `.gitignore` (a committed edit;
+`.claude/*` then ignores the whole directory) and untrack the settings:
+
+```sh
+git rm -r --cached .claude                    # jj: jj file untrack .claude
+git commit -m "Stop sharing .claude settings"
+```
+
+Or simply leave `settings.json` shared — the template's default intent.
+
+**Do this before the first push.** Untracking stops these files going *forward*,
+which is what matters day to day — but a repo created via GitHub's *Use this
+template* already carries the template's copies in its **initial commit on the
+remote**, so untracking drops them from the tip only; they survive in history.
+For a repo that never contained them, copy the template into a fresh `git init`
+and untrack before the first commit.
+
+(In the **template repo**, skip all of this — its `CLAUDE.md` / `AGENTS.md` /
+`.claude/` are meant to stay tracked and shared.)
+
 ## Placeholder tokens
 
 | Token | Meaning |
@@ -170,4 +242,7 @@ and green.
 - [ ] `build.gradle.kts` POM metadata (description, URLs, developer) filled in.
 - [ ] `group` is a namespace you can verify on the Central Portal.
 - [ ] `CLAUDE.md` "Architecture" section written for your project.
+- [ ] Agent-instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/`) made local —
+      untracked + ignored so they don't reach the remote (before the first push).
+      See "Make agent instructions local in the new repo".
 - [ ] Branch protection / required checks configured for `main` (CI).
