@@ -245,4 +245,7 @@ and green.
 - [ ] Agent-instruction files (`CLAUDE.md`, `AGENTS.md`, `.claude/`) made local —
       untracked + ignored so they don't reach the remote (before the first push).
       See "Make agent instructions local in the new repo".
-- [ ] Branch protection / required checks configured for `main` (CI).
+- [ ] Branch protection for `main` configured — require pull requests (plus CI / CodeQL
+      checks). The agent docs (`CLAUDE.md` / `AGENTS.md`) now assume a
+      feature-branch + PR flow into `main`. The release workflow only pushes
+      tags (not commits to `main`), so requiring PRs doesn't block it.

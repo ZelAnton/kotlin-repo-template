@@ -167,10 +167,18 @@ with `jj git import`).
   follow-ups into the current change; re-`describe` on scope shift.
 - **Orthogonal work:** ask before splitting — `jj new -m "..."` (descendant) or
   `jj new @- -m "..."` (parallel sibling).
-- **Sync only on the user's explicit `pull`/`push`/`sync`:** `jj git fetch`;
-  rebase if upstream advanced (`jj rebase -r @- -d main@origin`);
-  `jj bookmark set main -r <rev>`; `jj git push`. **Never push without an
-  explicit signal.**
+- **Sync only on the user's explicit `pull`/`push`/`sync`:** `jj git fetch`
+  (picks up merged PRs); rebase if upstream advanced
+  (`jj rebase -r @- -d main@origin`); put the work on a **feature bookmark** —
+  `jj bookmark create <topic> -r @` the first time (then
+  `jj bookmark move <topic> --to @`), `jj git push --allow-new -b <topic>`; open
+  a PR into `main` (`gh pr create --base main --head <topic> --fill`). `main`
+  advances only via merged PRs. **Never push without an explicit signal.**
+  *Fallback:* where `main` is unprotected, push it directly
+  (`jj bookmark move main --to @`; `jj git push -b main`); once PRs are required
+  this is rejected for everyone except an automated actor granted a bypass.
 - **Undo:** `jj undo`, `jj abandon <rev>`, `jj restore`, `jj op log` +
   `jj op restore <op-id>`.
-- **No new bookmarks unless asked.** Work lands on `main`.
+- **Feature bookmark per PR is the unit of work** (short kebab-case topic).
+  Don't advance `main` locally to publish — it moves only via merged PRs and the
+  release workflow's tag.
