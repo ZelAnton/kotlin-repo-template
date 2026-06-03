@@ -9,13 +9,17 @@ deleted from downstream repos by the init script).
 
 1. **Read the layout, don't assume it.** This is a Gradle (Kotlin DSL) library,
    not Maven, not Android. There is one root module.
-2. **Run the init script — don't hand-edit tokens.** `scripts/init.ps1`
+2. **Check the toolchain first.** Run `scripts/check-env.ps1` (or
+   `scripts/check-env.sh`). If it reports a missing or too-old JDK, STOP and offer
+   the user the install commands it prints — don't run init against an environment
+   that can't launch Gradle.
+3. **Run the init script — don't hand-edit tokens.** `scripts/init.ps1`
    (PowerShell) or `scripts/init.sh` (POSIX) does the substitution *and* the
    package-directory move. Doing it by hand misses the directory move and breaks
    the build.
-3. **Verify with `./gradlew build`** (the wrapper, not a system `gradle`).
-4. **Use the wrapper.** First run downloads the Gradle distribution; let it.
-5. **Make agent instructions local.** After init, untrack `CLAUDE.md`,
+4. **Verify with `./gradlew build`** (the wrapper, not a system `gradle`).
+5. **Use the wrapper.** First run downloads the Gradle distribution; let it.
+6. **Make agent instructions local.** After init, untrack `CLAUDE.md`,
    `AGENTS.md`, and `.claude/` in the new repo so they don't push to its remote
    (see "Make agent instructions local in the new repo" below).
 
@@ -63,12 +67,17 @@ deliberately want older bytecode from a recent toolchain, set the Kotlin
 
 ## The happy path (standard single-module init)
 
+First check the environment — if `check-env` flags a missing/too-old JDK, stop and
+offer the user the install commands it prints before continuing:
+
 ```pwsh
+pwsh ./scripts/check-env.ps1
 pwsh ./scripts/init.ps1 -ProjectName acme-widgets -PackageName com.acme.widgets -Author "Jane Doe" -AuthorEmail jane@acme.com -GitHubOwner acme -Description "Widget toolkit"
 ./gradlew build
 ```
 
 ```bash
+bash ./scripts/check-env.sh
 bash ./scripts/init.sh --project-name acme-widgets --package-name com.acme.widgets --author "Jane Doe" --author-email jane@acme.com --github-owner acme --description "Widget toolkit"
 ./gradlew build
 ```

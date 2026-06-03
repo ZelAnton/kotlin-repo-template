@@ -15,7 +15,23 @@ pipeline, and conventions for agents in [CLAUDE.md](CLAUDE.md) /
 
 1. Create a new repository from this one (GitHub: **Use this template**), or copy
    the files into a fresh repo.
-2. Run the init script once to stamp your project name in:
+2. **Check your environment is ready.** Before initializing, confirm this machine
+   can build and test a Kotlin/Gradle project. Use whichever matches your shell:
+
+   ```pwsh
+   pwsh ./scripts/check-env.ps1
+   ```
+
+   ```bash
+   bash ./scripts/check-env.sh
+   ```
+
+   It checks for a JDK on `PATH` to launch the Gradle wrapper (the JDK 25 compile
+   toolchain is downloaded automatically by the foojay resolver on first build).
+   If a JDK is missing or too old it lists the install commands for your OS and
+   exits non-zero — install one, then re-run it. **Don't run init until it reports
+   the environment is ready.**
+3. Run the init script once to stamp your project name in:
 
    ```pwsh
    pwsh ./scripts/init.ps1 -ProjectName acme-widgets -PackageName com.acme.widgets -Author "Jane Doe" -GitHubOwner acme -Description "Widget toolkit"
@@ -40,13 +56,13 @@ pipeline, and conventions for agents in [CLAUDE.md](CLAUDE.md) /
    - activates `.claude/settings.json` from its shipped `.template` form;
    - deletes `TEMPLATE.md`, `docs/AGENT-INIT-GUIDE.md`, and (unless
      `-KeepScript`) both initializers.
-3. Verify:
+4. Verify:
 
    ```sh
    ./gradlew build
    ```
 
-4. Replace the placeholder `greet` function in `src/main/kotlin/...` with your
+5. Replace the placeholder `greet` function in `src/main/kotlin/...` with your
    real API and update the sample test.
 
 ## Make agent instructions local in the new repo (init step)
