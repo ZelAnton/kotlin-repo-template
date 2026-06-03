@@ -2,7 +2,7 @@
 
 A starting point for Kotlin (JVM) libraries built with Gradle (Kotlin DSL): a
 version catalog, a strict `.editorconfig` + ktlint, `explicitApi()` and
-warnings-as-errors, JUnit 5, cross-platform CI, an optional Maven Central release
+warnings-as-errors, JUnit 6, cross-platform CI, an optional Maven Central release
 pipeline, and conventions for agents in [CLAUDE.md](CLAUDE.md) /
 [AGENTS.md](AGENTS.md).
 
@@ -149,7 +149,7 @@ and untrack before the first commit.
   declaration. The init script moves the token package directory accordingly.
 - **ktlint, not `dotnet format`.** Formatting/linting is enforced by the
   `org.jlleitschuh.gradle.ktlint` plugin and checked in CI.
-- **JUnit 5 (Jupiter)** is the test framework, wired via a BOM and
+- **JUnit 6 (Jupiter)** is the test framework, wired via a BOM and
   `useJUnitPlatform()`.
 - **CodeQL is enabled.** GitHub CodeQL supports Kotlin via its `java-kotlin`
   analysis; `codeql.yml` is included (delete it if unwanted). CI otherwise relies
@@ -159,7 +159,9 @@ and untrack before the first commit.
   published artifact needs a JDK 25+ runtime — lower `jvmToolchain(...)` to an LTS
   (17/21) for wider reach. The JDK 25 toolchain is downloaded automatically via
   the **foojay resolver** (`settings.gradle.kts`) when it isn't installed locally.
-- **Coverage via Kover** (`org.jetbrains.kotlinx.kover`): `./gradlew koverHtmlReport`.
+- **Coverage via Kover** (`org.jetbrains.kotlinx.kover`) — opt-in (see below):
+  uncomment `alias(libs.plugins.kover)` in `build.gradle.kts`, then
+  `./gradlew koverHtmlReport`.
 - **Dependency graph submission.** `.github/workflows/dependency-submission.yml`
   feeds the resolved Gradle graph to GitHub so Dependabot alerts cover transitive
   dependencies too.
@@ -220,6 +222,11 @@ These are pre-declared in `gradle/libs.versions.toml` so enabling them is a
 one-liner; left off by default to keep the out-of-the-box `./gradlew build` fast
 and green.
 
+- **Kover** — Kotlin code coverage (`koverHtmlReport` / `koverVerify`). Enable by
+  uncommenting `alias(libs.plugins.kover)` in `build.gradle.kts`. Off by default
+  because Kover's plugin classpath can clash with the Kotlin Gradle Plugin's
+  embedded compiler on a bleeding-edge Kotlin; enable once a Kover release that
+  matches your Kotlin version is available.
 - **Binary Compatibility Validator** — the natural companion to `explicitApi()`:
   it records the public ABI in `api/*.api` and fails the build on an unintended
   change. Enable by uncommenting the

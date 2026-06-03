@@ -28,7 +28,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew ktlintCheck
 ./gradlew ktlintFormat
 
-# Code coverage report (Kover) → build/reports/kover/html/index.html
+# Code coverage report (Kover, opt-in — uncomment alias(libs.plugins.kover) in
+# build.gradle.kts first) → build/reports/kover/html/index.html
 ./gradlew koverHtmlReport
 
 # Publish to the local Maven repository for manual consumption.
@@ -98,7 +99,7 @@ Management). Build scripts reference them as `libs.<alias>` /
 fixed allow-list — add the production and test dependencies the project actually
 needs, each as a catalog entry.
 
-The JUnit 5 (Jupiter) test stack is wired through the catalog's `junit-bom`, so
+The JUnit 6 (Jupiter) test stack is wired through the catalog's `junit-bom`, so
 individual `junit-*` artifacts are declared without their own versions.
 `kotlin("test")` is mapped onto the JUnit Platform via `useJUnitPlatform()`.
 
