@@ -163,6 +163,16 @@ Colocated git + [jujutsu (`jj`)](https://jj-vcs.github.io/jj/). Drive everything
 through `jj` (git writes can desync the jj working copy; if unavoidable, follow
 with `jj git import`).
 
+**Evaluate each new prompt before editing** — classify the scope:
+
+| Signal in prompt | Category | Action |
+|---|---|---|
+| Same topic, refinement, follow-up of in-progress work | **Continuation** | Just work. jj auto-folds edits into the current change. |
+| Same change but goal has been refined or expanded | **Scope shift** | `jj describe -m "<refined summary>"`. **Don't** start a new change. |
+| Orthogonal topic, different area, "теперь сделай X" | **New work** | If current change is finished → `jj new -m "<summary>"` (descendant). If still in progress → `jj new @- -m "..."` (parallel sibling). |
+
+Reliable signals: word changes like "теперь" / "now" / "next" / "также сделай" / "and also" usually mean **new work** or **scope shift**. Imperative follow-ups inside the same scope ("исправь это", "fix this", "продолжи") mean **continuation**. When in doubt, ask the user.
+
 - **Describe early:** `jj describe -m "..."` at the start of work; fold small
   follow-ups into the current change; re-`describe` on scope shift.
 - **Orthogonal work:** ask before splitting — `jj new -m "..."` (descendant) or
