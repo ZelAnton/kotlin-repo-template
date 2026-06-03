@@ -5,9 +5,9 @@ is the canonical, detailed reference; [CLAUDE.md](CLAUDE.md) is a shorter pointe
 to it.
 
 > **Template note:** this file ships with placeholder tokens (`__ProjectName__`,
-> `__PackageName__`, `__Group__`, `__Author__`, `__GitHubOwner__`,
-> `__Description__`, `__Year__`) that `scripts/init.ps1` stamps in. After
-> initialization, fill the **Project** section below.
+> `__PackageName__`, `__Group__`, `__Author__`, `__AuthorEmail__`,
+> `__GitHubOwner__`, `__Description__`, `__Year__`) that `scripts/init.ps1`
+> stamps in. After initialization, fill the **Project** section below.
 
 ## Agent instructions are local-only in this (generated) repo
 
@@ -191,4 +191,5 @@ Reliable signals: word changes like "теперь" / "now" / "next" / "такж�
   `jj op restore <op-id>`.
 - **Feature bookmark per PR is the unit of work** (short kebab-case topic).
   Don't advance `main` locally to publish — it moves only via merged PRs and the
-  release workflow's tag.
+  release workflow (which pushes its release commit + tag to `main` — as the
+  automated actor granted a bypass, or directly while `main` is unprotected).
