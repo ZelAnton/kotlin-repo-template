@@ -9,7 +9,7 @@
 [versions]
 # Kotlin 2.3 is the first release with JDK 25 support; on 2.2 the compiler
 # silently falls back to the JVM 24 bytecode target under a JDK 25 toolchain.
-kotlin = "2.3.21"
+kotlin = "2.4.0"
 # JUnit 6 (Jupiter) requires Java 17+ — fine here, the toolchain is JDK 25.
 junit = "6.1.0"
 # ktlint-gradle 14.0.1+ fixed worker launching under a JDK 25 toolchain whose
