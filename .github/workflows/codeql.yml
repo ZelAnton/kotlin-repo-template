@@ -22,16 +22,19 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to a full commit SHA (supply-chain hardening); the
+      # trailing comment records the human-readable version. Dependabot bumps the
+      # SHA and updates the comment on its weekly run.
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4
         with:
           distribution: temurin
           java-version: '25'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4
 
       # CodeQL's Kotlin extractor caps the Kotlin versions it will analyse and
       # lags new Kotlin releases by weeks: a Kotlin even one patch newer than the
@@ -53,7 +56,7 @@ jobs:
 
       # GitHub CodeQL analyses Kotlin through its java-kotlin pack.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@d77b13a0df3134d64a457ea9003f600b09fa1c8a # v3
         with:
           languages: java-kotlin
           queries: security-and-quality
@@ -66,6 +69,6 @@ jobs:
         run: ./gradlew assemble --no-build-cache --stacktrace
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@d77b13a0df3134d64a457ea9003f600b09fa1c8a # v3
         with:
           category: "/language:java-kotlin"

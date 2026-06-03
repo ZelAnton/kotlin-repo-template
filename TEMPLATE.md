@@ -129,6 +129,7 @@ and untrack before the first commit.
 | `__PackageName__` | Kotlin package (dotted) + the source directory path |
 | `__Group__` | Maven group id (e.g. `com.acme`) |
 | `__Author__` | author (LICENSE, POM developer) |
+| `__AuthorEmail__` | author email (release-commit identity in `release.yml`) |
 | `__GitHubOwner__` | GitHub owner/org in repository URLs |
 | `__Description__` | project description |
 | `__Year__` | copyright year |

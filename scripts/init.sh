@@ -4,15 +4,15 @@
 # counterpart of init.ps1 — use whichever matches your shell; both do the same).
 #
 # Replaces the placeholder tokens (__ProjectName__, __PackageName__, __Group__,
-# __Author__, __GitHubOwner__, __Description__, __Year__) in file contents, moves
+# __Author__, __AuthorEmail__, __GitHubOwner__, __Description__, __Year__) in file contents, moves
 # the token-named Kotlin source package into the real dotted-package directory
 # tree, then removes the template-only files (TEMPLATE.md, docs/AGENT-INIT-GUIDE.md)
 # and — unless --keep-script — both initializers (init.sh and init.ps1).
 #
 # Usage:
 #   bash ./scripts/init.sh --project-name acme-widgets --package-name com.acme.widgets \
-#       [--group com.acme] [--author "Jane Doe"] [--github-owner acme] \
-#       [--description "Widget toolkit"] [--year 2026] [--keep-script]
+#       [--group com.acme] [--author "Jane Doe"] [--author-email you@example.com] \
+#       [--github-owner acme] [--description "Widget toolkit"] [--year 2026] [--keep-script]
 #
 # --project-name is required; the rest fall back to sensible defaults so the
 # result always builds. Edit LICENSE / build.gradle.kts afterwards to refine them.
@@ -23,6 +23,7 @@ project_name=""
 package_name=""
 group=""
 author=""
+author_email=""
 github_owner=""
 description=""
 year=""
@@ -36,11 +37,12 @@ while [ $# -gt 0 ]; do
     --package-name)  package_name="${2:-}"; shift 2 ;;
     --group)         group="${2:-}"; shift 2 ;;
     --author)        author="${2:-}"; shift 2 ;;
+    --author-email)  author_email="${2:-}"; shift 2 ;;
     --github-owner)  github_owner="${2:-}"; shift 2 ;;
     --description)   description="${2:-}"; shift 2 ;;
     --year)          year="${2:-}"; shift 2 ;;
     --keep-script)   keep_script=1; shift ;;
-    -h|--help)       sed -n '2,21p' "$0"; exit 0 ;;
+    -h|--help)       sed -n '2,18p' "$0"; exit 0 ;;
     *)               die "unknown argument: $1" ;;
   esac
 done
@@ -69,6 +71,10 @@ pkg_segment() {
 if [ -z "$author" ]; then
   author="$(git config user.name 2>/dev/null || true)"
   [ -n "$author" ] || author="Your Name"
+fi
+if [ -z "$author_email" ]; then
+  author_email="$(git config user.email 2>/dev/null || true)"
+  [ -n "$author_email" ] || author_email="you@example.com"
 fi
 [ -n "$github_owner" ] || github_owner="your-org"
 [ -n "$description" ]  || description="TODO: project description"
@@ -99,6 +105,7 @@ esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
 project_e="$(esc "$project_name")"
 group_e="$(esc "$group")"
 author_e="$(esc "$author")"
+author_email_e="$(esc "$author_email")"
 owner_e="$(esc "$github_owner")"
 desc_e="$(esc "$description")"
 year_e="$(esc "$year")"
@@ -120,8 +127,8 @@ while IFS= read -r -d '' file; do
     *.jar|*.png|*.jpg|*.gif|*.ico|*.zip) continue ;;
   esac
   case "$file" in
-    *.kts|*.toml) p=$project_e; g=$group_e; a=$author_e; o=$owner_e; d=$desc_e; y=$year_e ;;
-    *)            p=$project_name; g=$group; a=$author; o=$github_owner; d=$description; y=$year ;;
+    *.kts|*.toml) p=$project_e; g=$group_e; a=$author_e; ae=$author_email_e; o=$owner_e; d=$desc_e; y=$year_e ;;
+    *)            p=$project_name; g=$group; a=$author; ae=$author_email; o=$github_owner; d=$description; y=$year ;;
   esac
   # Preserve trailing newlines: append a sentinel before capture, strip it after.
   content="$(cat "$file"; printf x)"; content="${content%x}"
@@ -130,6 +137,7 @@ while IFS= read -r -d '' file; do
   content="${content//__PackageName__/$package_name}"
   content="${content//__Group__/$g}"
   content="${content//__Author__/$a}"
+  content="${content//__AuthorEmail__/$ae}"
   content="${content//__GitHubOwner__/$o}"
   content="${content//__Description__/$d}"
   content="${content//__Year__/$y}"

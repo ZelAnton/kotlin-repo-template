@@ -7,7 +7,7 @@
     POSIX counterpart: scripts/init.sh — use whichever matches your shell.
 
     Replaces the placeholder tokens (__ProjectName__, __PackageName__, __Group__,
-    __Author__, __GitHubOwner__, __Description__, __Year__) in file contents,
+    __Author__, __AuthorEmail__, __GitHubOwner__, __Description__, __Year__) in file contents,
     moves the token-named Kotlin source package
     (src/{main,test}/kotlin/__PackageName__) into the real dotted-package
     directory tree, then removes the template-only files (TEMPLATE.md,
@@ -35,6 +35,10 @@
 .PARAMETER Author
     Author for LICENSE / POM. Defaults to `git config user.name`, else "Your Name".
 
+.PARAMETER AuthorEmail
+    Author email (release-commit identity in release.yml). Defaults to
+    `git config user.email`, else "you@example.com".
+
 .PARAMETER GitHubOwner
     GitHub owner/org used in repository URLs. Defaults to "your-org".
 
@@ -58,6 +62,7 @@ param(
     [string]$PackageName,
     [string]$Group,
     [string]$Author,
+    [string]$AuthorEmail,
     [string]$GitHubOwner,
     [string]$Description,
     [int]$Year = (Get-Date).Year,
@@ -74,6 +79,10 @@ if ($ProjectName -notmatch '^[A-Za-z][A-Za-z0-9_-]*$') {
 if (-not $Author) {
     $Author = (& git config user.name 2>$null)
     if (-not $Author) { $Author = 'Your Name' }
+}
+if (-not $AuthorEmail) {
+    $AuthorEmail = (& git config user.email 2>$null)
+    if (-not $AuthorEmail) { $AuthorEmail = 'you@example.com' }
 }
 if (-not $GitHubOwner) { $GitHubOwner = 'your-org' }
 if (-not $Description) { $Description = 'TODO: project description' }
@@ -105,6 +114,7 @@ $replacements = [ordered]@{
     '__PackageName__' = $PackageName
     '__Group__'       = $Group
     '__Author__'      = $Author
+    '__AuthorEmail__' = $AuthorEmail
     '__GitHubOwner__' = $GitHubOwner
     '__Description__'  = $Description
     '__Year__'        = "$Year"

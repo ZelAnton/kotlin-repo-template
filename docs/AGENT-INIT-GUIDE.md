@@ -27,6 +27,9 @@ deleted from downstream repos by the init script).
 - Toolchain: Kotlin 2.3, Gradle 9.5 (wrapper), JDK 25 via `jvmToolchain(25)`.
 - Style: spaces (4), ktlint, `explicitApi()` strict, warnings-as-errors.
 - Tests: JUnit 5 via a BOM + `useJUnitPlatform()`, `kotlin("test")`.
+- Placeholder tokens substituted by the init script: `__ProjectName__`,
+  `__PackageName__`, `__Group__`, `__Author__`, `__AuthorEmail__` (release-commit
+  identity in `release.yml`), `__GitHubOwner__`, `__Description__`, `__Year__`.
 
 ## The package-directory trap (Kotlin-specific)
 
@@ -61,12 +64,12 @@ Kotlin ships a JVM 25 target.
 ## The happy path (standard single-module init)
 
 ```pwsh
-pwsh ./scripts/init.ps1 -ProjectName acme-widgets -PackageName com.acme.widgets -Author "Jane Doe" -GitHubOwner acme -Description "Widget toolkit"
+pwsh ./scripts/init.ps1 -ProjectName acme-widgets -PackageName com.acme.widgets -Author "Jane Doe" -AuthorEmail jane@acme.com -GitHubOwner acme -Description "Widget toolkit"
 ./gradlew build
 ```
 
 ```bash
-bash ./scripts/init.sh --project-name acme-widgets --package-name com.acme.widgets --author "Jane Doe" --github-owner acme --description "Widget toolkit"
+bash ./scripts/init.sh --project-name acme-widgets --package-name com.acme.widgets --author "Jane Doe" --author-email jane@acme.com --github-owner acme --description "Widget toolkit"
 ./gradlew build
 ```
 
