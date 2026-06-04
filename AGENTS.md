@@ -65,8 +65,13 @@ system `gradle` — so the build always runs against the pinned version.
 | One test | `./gradlew test --tests "__PackageName__.GreeterTest"` |
 | Lint | `./gradlew ktlintCheck` |
 | Auto-format | `./gradlew ktlintFormat` |
-| Coverage report | `./gradlew koverHtmlReport` |
+| Coverage report (Kover, opt-in¹) | `./gradlew koverHtmlReport` |
 | Publish locally | `./gradlew publishToMavenLocal` |
+
+¹ **Kover is opt-in** and off by default — the `koverHtmlReport` task only exists
+after you uncomment `alias(libs.plugins.kover)` in `build.gradle.kts` (see
+TEMPLATE.md "Opt-in tooling"). Running it before then fails with *"Task
+'koverHtmlReport' not found"*.
 
 The build is **warnings-as-errors** (`allWarningsAsErrors = true`) and runs
 ktlint as part of `check`/`build`. A new warning or lint violation fails the
@@ -120,7 +125,7 @@ build; fix it rather than suppressing it.
   version inline in `build.gradle.kts`.
 - It is **not** a fixed allow-list — add what the project needs, each as a
   catalog entry. Give a non-obvious dependency a short comment on why it's there.
-- JUnit 5 is aligned through `junit-bom`; declare `junit-*` artifacts without
+- JUnit 6 is aligned through `junit-bom`; declare `junit-*` artifacts without
   their own versions. `kotlin("test")` runs on the JUnit Platform via
   `useJUnitPlatform()`.
 - Keep the Kotlin and ktlint-plugin versions compatible; when bumping Kotlin,
@@ -129,7 +134,7 @@ build; fix it rather than suppressing it.
 ## Tests
 
 - Place tests under `src/test/kotlin/<package path>` mirroring the main package.
-- Write them as JUnit 5 test classes with `@Test` methods. Backtick-quoted method
+- Write them as JUnit 6 test classes with `@Test` methods. Backtick-quoted method
   names (`` `greet returns greeting with name` ``) are encouraged for readability.
 - Run after a build (or let the test task build); assert behaviour, not
   implementation detail.

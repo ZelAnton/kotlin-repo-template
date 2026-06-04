@@ -26,7 +26,7 @@ deleted from downstream repos by the init script).
   `gradle/libs.versions.toml` (version catalog).
 - Toolchain: Kotlin 2.3, Gradle 9.5 (wrapper), JDK 25 via `jvmToolchain(25)`.
 - Style: spaces (4), ktlint, `explicitApi()` strict, warnings-as-errors.
-- Tests: JUnit 5 via a BOM + `useJUnitPlatform()`, `kotlin("test")`.
+- Tests: JUnit 6 via a BOM + `useJUnitPlatform()`, `kotlin("test")`.
 - Placeholder tokens substituted by the init script: `__ProjectName__`,
   `__PackageName__`, `__Group__`, `__Author__`, `__AuthorEmail__` (release-commit
   identity in `release.yml`), `__GitHubOwner__`, `__Description__`, `__Year__`.
@@ -47,19 +47,19 @@ If you substitute tokens by hand and forget the move, the file declares
 Kotlin compiles it (it warns, not errors, on mismatched dirs for non-`main`), but
 it's wrong and confuses tooling. Always use the script.
 
-## The JDK-25 fallback warning is not an error
+## JVM target: keep Kotlin at 2.3+
 
-On a JDK 25 toolchain the Kotlin compiler prints:
+The build runs a JDK 25 toolchain and targets JVM 25 bytecode. **Kotlin 2.3** is
+the first release that emits a JVM 25 target; on Kotlin 2.2 the compiler silently
+falls back to JVM 24 under a JDK 25 toolchain — you'd ship 24 bytecode without an
+error. The catalog pins Kotlin 2.3+ for exactly this reason, so don't drop below
+it.
 
-```
-'compileJava' task (current target is 25) and 'compileKotlin' task ... jvmTarget (24) ...
-warning: ... falling back to Kotlin JVM_24 JVM target
-```
-
-This is expected — Kotlin's max bytecode target is JVM 24 at the time of writing.
-Do **not** lower `jvmToolchain` to 24 to silence it; the toolchain controls which
-JDK runs the build, and 25 is what's installed. The warning disappears when
-Kotlin ships a JVM 25 target.
+Don't lower `jvmToolchain(25)` to chase a target mismatch either: the toolchain
+only controls which JDK runs the build, and 25 is what's installed. If you
+deliberately want older bytecode from a recent toolchain, set the Kotlin
+`jvmTarget` **and** the Java `sourceCompatibility`/`targetCompatibility` together
+(Gradle fails the build if they disagree).
 
 ## The happy path (standard single-module init)
 

@@ -40,8 +40,11 @@ TODO: replace the placeholder API above and document the real public surface.
 ```sh
 ./gradlew build          # compile, test, lint
 ./gradlew ktlintFormat   # auto-fix formatting
-./gradlew koverHtmlReport # coverage → build/reports/kover/html/index.html
+./gradlew koverHtmlReport # coverage (enable Kover first — opt-in, see below) → build/reports/kover/html/index.html
 ```
+
+Kover is **opt-in**: uncomment `alias(libs.plugins.kover)` in `build.gradle.kts`
+before `koverHtmlReport` exists as a task (see "Opt-in tooling" in TEMPLATE.md).
 
 ## Changelog
 
