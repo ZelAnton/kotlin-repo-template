@@ -38,21 +38,26 @@ jobs:
 
       # CodeQL's Kotlin extractor caps the Kotlin versions it will analyse and
       # lags new Kotlin releases by weeks: a Kotlin even one patch newer than the
-      # bundled extractor supports is rejected, and the run fails with "no source
-      # code seen during build". Raise the cap to exactly the version this project
-      # uses (read from the catalog so it tracks the real version) — a patch bump
-      # keeps the Kotlin compiler-plugin API compatible, so extraction still works.
-      # If a future Kotlin *minor* breaks extraction outright, drop the workflow
-      # until CodeQL ships support, or pin Kotlin to a supported release for CI.
-      - name: Raise CodeQL Kotlin version cap to the project's Kotlin
+      # bundled extractor supports is rejected ("Kotlin version X is too recent.
+      # CodeQL currently supports versions below Y"), and the run fails. The cap is
+      # an *exclusive* upper bound — the extractor rejects any version >= the limit
+      # — so the limit must be strictly greater than the version we build with.
+      # Read the real version from the catalog and bump its patch component (2.4.0
+      # -> 2.4.1) so our exact version sits just below the cap. A patch bump keeps
+      # the Kotlin compiler-plugin API compatible, so extraction still works. If a
+      # future Kotlin *minor* breaks extraction outright, drop the workflow until
+      # CodeQL ships support, or pin Kotlin to a supported release for CI.
+      - name: Raise CodeQL Kotlin version cap above the project's Kotlin
         run: |
           kv=$(grep -E '^kotlin[[:space:]]*=' gradle/libs.versions.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           if [ -z "$kv" ]; then
             echo "Could not read the Kotlin version from gradle/libs.versions.toml" >&2
             exit 1
           fi
-          echo "Project Kotlin version: $kv"
-          echo "CODEQL_EXTRACTOR_KOTLIN_OVERRIDE_MAXIMUM_VERSION_LIMIT=$kv" >> "$GITHUB_ENV"
+          # The cap is exclusive, so set it one patch above the version in use.
+          limit=$(echo "$kv" | awk -F. -v OFS=. '{ $3 = $3 + 1; print }')
+          echo "Project Kotlin version: $kv (cap set to $limit)"
+          echo "CODEQL_EXTRACTOR_KOTLIN_OVERRIDE_MAXIMUM_VERSION_LIMIT=$limit" >> "$GITHUB_ENV"
 
       # GitHub CodeQL analyses Kotlin through its java-kotlin pack.
       - name: Initialize CodeQL
