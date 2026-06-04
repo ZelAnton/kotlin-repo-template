@@ -213,7 +213,12 @@ jobs:
         id: changelog
         run: |
           set -euo pipefail
-          notes=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
+          # Capture lines under "## [Unreleased]" up to the next version header.
+          # Also stop at a markdown reference-link definition ("[x]: url"): on the
+          # FIRST release there is no later "## [" header to bound the range, so
+          # without this the trailing "[Unreleased]: <link>" line would leak into
+          # the release notes.
+          notes=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} /^\[[^]]+\]:[[:space:]]/{f=0} f' CHANGELOG.md)
           {
             echo "notes<<__NOTES_EOF__"
             echo "$notes"

@@ -253,7 +253,7 @@ and green.
 - **detekt** — static analysis for code smells and complexity (ktlint only covers
   formatting). Add `detekt = "<latest>"` + a plugin alias to the catalog and apply
   `io.gitlab.arturbosch.detekt`. The current stable detekt targets an older Kotlin;
-  confirm a build that supports Kotlin 2.3 before enabling.
+  confirm a build that supports the catalog's Kotlin version before enabling.
 - **Dokka** — real API docs in the published `-javadoc` jar (the default is an
   empty javadoc jar). Apply `org.jetbrains.dokka` and switch the publishing
   `configure(...)` call to `JavadocJar.Dokka("dokkaHtml")` as noted in

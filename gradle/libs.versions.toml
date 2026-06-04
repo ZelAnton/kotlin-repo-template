@@ -4,7 +4,7 @@
 #
 # This is NOT a fixed allow-list — add the production and test dependencies your
 # project actually needs. The entries below are only the template's own stack
-# (Kotlin, the JUnit 5 test runner, and ktlint) and can be changed or removed.
+# (Kotlin, the JUnit 6 test runner, and ktlint) and can be changed or removed.
 
 [versions]
 # Kotlin 2.3 is the first release with JDK 25 support; on 2.2 the compiler

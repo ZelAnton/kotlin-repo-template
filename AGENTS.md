@@ -79,7 +79,7 @@ build; fix it rather than suppressing it.
 
 ## Toolchain
 
-- **Kotlin 2.3+**, **Gradle 9.5** (wrapper), **JDK 25** toolchain
+- **Kotlin 2.3+**, **Gradle 9.5.1** (wrapper), **JDK 25** toolchain
   (`jvmToolchain(25)`) — the build both compiles on and targets JVM 25, so the
   published artifact needs a JDK 25+ runtime. The toolchain means the build does
   not depend on the JDK on `PATH`: the **foojay resolver** (`settings.gradle.kts`)

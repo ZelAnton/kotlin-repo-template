@@ -28,7 +28,7 @@ deleted from downstream repos by the init script).
 - A single-module Kotlin/JVM **library** crate-equivalent.
 - Build: `build.gradle.kts` + `settings.gradle.kts`, versions in
   `gradle/libs.versions.toml` (version catalog).
-- Toolchain: Kotlin 2.3, Gradle 9.5 (wrapper), JDK 25 via `jvmToolchain(25)`.
+- Toolchain: Kotlin 2.4, Gradle 9.5.1 (wrapper), JDK 25 via `jvmToolchain(25)`.
 - Style: spaces (4), ktlint, `explicitApi()` strict, warnings-as-errors.
 - Tests: JUnit 6 via a BOM + `useJUnitPlatform()`, `kotlin("test")`.
 - Placeholder tokens substituted by the init script: `__ProjectName__`,
