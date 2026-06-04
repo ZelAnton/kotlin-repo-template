@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 > This is the Kotlin sibling of `cSharp-repo-template` / `fSharp-repo-template` /
 > `rust-repo-template`, scaffolded by mirroring those and adapting for Kotlin +
 > Gradle. It is a **token template**: `__ProjectName__`, `__PackageName__`,
-> `__Group__`, `__Author__`, `__GitHubOwner__`, `__Description__`, and `__Year__`
-> are stamped in by `scripts/init.ps1` (or the POSIX `scripts/init.sh`). Read
+> `__Group__`, `__Author__`, `__AuthorEmail__`, `__GitHubOwner__`,
+> `__Description__`, and `__Year__` are stamped in by `scripts/init.ps1` (or the
+> POSIX `scripts/init.sh`). Read
 > [TEMPLATE.md](TEMPLATE.md) and [AGENTS.md](AGENTS.md) for the full layout and
 > the enforced conventions; the Kotlin-specific deviations are summarised in
 > TEMPLATE.md.
@@ -164,4 +165,5 @@ The repo is colocated git + [jujutsu (`jj`)](https://jj-vcs.github.io/jj/); use
   `jj op log` + `jj op restore <op-id>`.
 - **Feature bookmark per PR is the unit of work** (short kebab-case topic).
   Don't advance `main` locally to publish — it moves only via merged PRs and the
-  release workflow's tag.
+  release workflow (which pushes its release commit + tag to `main` — as the
+  automated actor granted a bypass, or directly while `main` is unprotected).

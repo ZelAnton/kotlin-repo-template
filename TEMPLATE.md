@@ -248,5 +248,10 @@ and green.
       See "Make agent instructions local in the new repo".
 - [ ] Branch protection for `main` configured — require pull requests (plus CI / CodeQL
       checks). The agent docs (`CLAUDE.md` / `AGENTS.md`) now assume a
-      feature-branch + PR flow into `main`. The release workflow only pushes
-      tags (not commits to `main`), so requiring PRs doesn't block it.
+      feature-branch + PR flow into `main`. Note the release workflow pushes a
+      *release commit* **and** tag straight to `main` (the CHANGELOG promotion),
+      so under branch protection that push is rejected unless the release actor
+      can bypass it — configure the GitHub App bypass (repo variable
+      `RELEASE_APP_ID` + secret `RELEASE_APP_PRIVATE_KEY`) as documented in
+      `release.yml`. While `main` is unprotected it falls back to `GITHUB_TOKEN`
+      and works without the App.
