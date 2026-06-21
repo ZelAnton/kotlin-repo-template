@@ -18,7 +18,7 @@ ktlint-plugin = "14.2.0"
 # Maven Central publishing. Plain `maven-publish` cannot talk to the Sonatype
 # Central Portal (the only path since OSSRH shut down); this plugin can. 0.34+
 # supports Gradle 9.
-maven-publish-plugin = "0.36.0"
+maven-publish-plugin = "0.37.0"
 # Foojay toolchain resolver — lets Gradle DOWNLOAD the JDK 25 toolchain when it
 # isn't already installed (jvmToolchain(25) only declares the requirement).
 foojay-resolver = "1.0.0"
