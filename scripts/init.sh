@@ -157,7 +157,19 @@ if [ -d "$repo_root/src" ]; then
     parent="$(dirname "$dir")"
     dest="$parent/$pkg_rel_path"
     mkdir -p "$dest"
-    find "$dir" -maxdepth 1 -type f -exec mv {} "$dest/" \;
+    # Recreate the complete relative directory tree before moving files so
+    # nested packages and empty directories survive the source removal.
+    while IFS= read -r -d '' nested_dir; do
+      [ "$nested_dir" = "$dir" ] && continue
+      relative="${nested_dir#"$dir"/}"
+      mkdir -p "$dest/$relative"
+    done < <(find "$dir" -type d -print0)
+    while IFS= read -r -d '' file; do
+      relative="${file#"$dir"/}"
+      target="$dest/$relative"
+      mkdir -p "$(dirname "$target")"
+      mv -f "$file" "$target"
+    done < <(find "$dir" -type f -print0)
     rm -rf "$dir"
     echo "    Moved ${parent#"$repo_root"/}/__PackageName__ -> ${parent#"$repo_root"/}/$pkg_rel_path"
   done < <(find "$repo_root/src" -type d -name '__PackageName__' -print0)

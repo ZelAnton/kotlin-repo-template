@@ -178,8 +178,18 @@ if (Test-Path $srcRoot) {
     foreach ($dir in $tokenDirs) {
         $dest = Join-Path $dir.Parent.FullName $pkgRelPath
         New-Item -ItemType Directory -Path $dest -Force | Out-Null
-        Get-ChildItem -LiteralPath $dir.FullName -File | ForEach-Object {
-            Move-Item -LiteralPath $_.FullName -Destination $dest -Force
+        # Recreate the complete relative directory tree before moving files so
+        # nested packages and empty directories survive the source removal.
+        Get-ChildItem -LiteralPath $dir.FullName -Directory -Recurse -Force | ForEach-Object {
+            $relative = $_.FullName.Substring($dir.FullName.Length).TrimStart('\', '/')
+            New-Item -ItemType Directory -Path (Join-Path $dest $relative) -Force | Out-Null
+        }
+        Get-ChildItem -LiteralPath $dir.FullName -File -Recurse -Force | ForEach-Object {
+            $relative = $_.FullName.Substring($dir.FullName.Length).TrimStart('\', '/')
+            $target = Join-Path $dest $relative
+            $targetParent = Split-Path -Parent $target
+            New-Item -ItemType Directory -Path $targetParent -Force | Out-Null
+            Move-Item -LiteralPath $_.FullName -Destination $target -Force
         }
         Remove-Item -LiteralPath $dir.FullName -Recurse -Force
         $relParent = $dir.Parent.FullName.Substring($repoRoot.Length).TrimStart('\', '/')
