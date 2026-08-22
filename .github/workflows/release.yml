@@ -1,6 +1,6 @@
 name: Release
 
-# Manual, opt-in publish to Maven Central via the Sonatype Central Portal, with
+# Manual, opt-in release to Maven Central via the Sonatype Central Portal, with
 # release notes sourced from CHANGELOG.md.
 #
 # Required repository secrets (see TEMPLATE.md "Publishing to Maven Central"):
@@ -18,9 +18,9 @@ name: Release
 # Everything before it is cheap and reversible (build/test/validate-publication,
 # plus a LOCAL commit+tag that is not yet pushed); everything after it (push the
 # commit+tag to main, create the GitHub Release) is reversible/recreatable and is
-# made idempotent + retried. A failure before the pivot leaves no trace on the
-# remote or registry — just re-run. A failure after the pivot is recoverable by
-# re-run, EXCEPT once the tag is on main (see the Release step's note).
+# made idempotent + retried. A failure before the pivot leaves no VCS/GitHub trace;
+# just re-run. A failure after the pivot is recoverable by re-run: a tag without its
+# GitHub Release resumes that exact tagged version.
 #
 # The "Push the release commit + tag" step pushes straight to main. If you
 # protect main with a rule that requires pull requests or status checks, that
@@ -140,6 +140,8 @@ jobs:
 
       - name: Determine next version
         id: version
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
         run: |
           set -euo pipefail
           LATEST_TAG=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)
@@ -149,13 +151,25 @@ jobs:
               echo "::error::Could not parse current version from tag (got: '$CURRENT')"
               exit 1
             fi
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-            case "${{ inputs.bump }}" in
-              major) NEW="$((MAJOR+1)).0.0" ;;
-              minor) NEW="${MAJOR}.$((MINOR+1)).0" ;;
-              patch) NEW="${MAJOR}.${MINOR}.$((PATCH+1))" ;;
-            esac
-            echo "Latest release tag: $LATEST_TAG (current=$CURRENT); ${{ inputs.bump }} bump -> $NEW"
+            # A tag without its GitHub Release is the durable marker left by a
+            # successful Maven publication followed by a failed final step. Resume
+            # that exact tagged commit/version instead of publishing the next one.
+            if gh release view "$LATEST_TAG" --json tagName >/dev/null 2>&1; then
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+              case "${{ inputs.bump }}" in
+                major) NEW="$((MAJOR+1)).0.0" ;;
+                minor) NEW="${MAJOR}.$((MINOR+1)).0" ;;
+                patch) NEW="${MAJOR}.${MINOR}.$((PATCH+1))" ;;
+              esac
+              RESUME=false
+              echo "Latest release tag: $LATEST_TAG (current=$CURRENT); GitHub Release exists."
+              echo "${{ inputs.bump }} bump -> $NEW"
+            else
+              NEW="$CURRENT"
+              RESUME=true
+              echo "GitHub Release for $LATEST_TAG is missing."
+              echo "Resuming the exact tagged version $NEW."
+            fi
           else
             # First release: take the seed version straight from the declared
             # fallback in build.gradle.kts (`providers.gradleProperty("version")
@@ -164,6 +178,7 @@ jobs:
             # bump input is ignored.
             CURRENT="0.0.0"
             NEW=$(grep -oP '(?<=getOrElse\(")[^"]+' build.gradle.kts | head -n1)
+            RESUME=false
             echo "No release tags found; seeding first release from build.gradle.kts getOrElse(\"$NEW\") (bump input ignored)."
           fi
           # Keep the strict version-format validation (applied to the derived
@@ -177,14 +192,23 @@ jobs:
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "version=$NEW" >> "$GITHUB_OUTPUT"
           echo "tag=v$NEW" >> "$GITHUB_OUTPUT"
+          echo "resume=$RESUME" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag does not exist
+        if: steps.version.outputs.resume != 'true'
         run: |
           set -euo pipefail
           if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
             echo "::error::Tag ${{ steps.version.outputs.tag }} already exists"
             exit 1
           fi
+
+      # A resumed run must build the exact source that produced the already-pushed
+      # tag. Do this before changelog extraction, publication, or release creation;
+      # main may have advanced since the original run stopped.
+      - name: Resume from existing release tag
+        if: steps.version.outputs.resume == 'true'
+        run: git checkout --detach "${{ steps.version.outputs.tag }}"
 
       # Only git-cliff (the changelog fallback) needs the previous tag, and only
       # LOCALLY, to bound its commit range. So when the previous tag is missing
@@ -209,16 +233,32 @@ jobs:
 
       # Release notes: prefer the curated CHANGELOG.md [Unreleased] section;
       # fall back to git-cliff over commits since the last tag if it's empty.
+      # The assembled file is persisted into the versioned changelog entry below,
+      # so a same-version resume never needs output from a skipped git-cliff step.
       - name: Extract changelog entry
         id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          # Capture lines under "## [Unreleased]" up to the next version header.
-          # Also stop at a markdown reference-link definition ("[x]: url"): on the
-          # FIRST release there is no later "## [" header to bound the range, so
-          # without this the trailing "[Unreleased]: <link>" line would leak into
-          # the release notes.
-          notes=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} /^\[[^]]+\]:[[:space:]]/{f=0} f' CHANGELOG.md)
+          if [[ "${{ steps.version.outputs.resume }}" == "true" ]]; then
+            # The tagged commit already contains the promoted entry. Do not use the
+            # current Unreleased section or git-cliff, which could describe changes
+            # made after the published version.
+            notes=$(awk -v version="$VERSION" '
+              index($0, "## [" version "]") == 1 { f=1; next }
+              /^## \[/ { if (f) exit }
+              /^\[[^]]+\]:[[:space:]]/ { if (f) exit }
+              f
+            ' CHANGELOG.md)
+          else
+            # Capture lines under "## [Unreleased]" up to the next version header.
+            # Also stop at a markdown reference-link definition ("[x]: url"): on the
+            # FIRST release there is no later "## [" header to bound the range, so
+            # without this the trailing "[Unreleased]: <link>" line would leak into
+            # the release notes.
+            notes=$(awk '/^## \[Unreleased\]/{f=1;next} /^## \[/{f=0} /^\[[^]]+\]:[[:space:]]/{f=0} f' CHANGELOG.md)
+          fi
           {
             echo "notes<<__NOTES_EOF__"
             echo "$notes"
@@ -232,7 +272,7 @@ jobs:
           fi
 
       - name: Generate notes from git history (fallback)
-        if: steps.changelog.outputs.has_manual == 'false'
+        if: steps.version.outputs.resume != 'true' && steps.changelog.outputs.has_manual == 'false'
         id: cliff
         uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4
         with:
@@ -280,10 +320,12 @@ jobs:
         run: ./gradlew publishToMavenLocal -Pversion="${{ steps.version.outputs.version }}" --stacktrace
 
       - name: Promote Unreleased section in CHANGELOG.md
+        if: steps.version.outputs.resume != 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
           PREV_TAG: v${{ steps.version.outputs.current }}
+          NOTES_FILE: ${{ steps.notes.outputs.path }}
         run: |
           set -euo pipefail
           python3 <<'PY'
@@ -301,15 +343,30 @@ jobs:
 
           path = pathlib.Path("CHANGELOG.md")
           text = path.read_text()
+          notes_path = pathlib.Path(os.environ["NOTES_FILE"])
+          release_notes = notes_path.read_text().strip()
+          if not release_notes:
+              print("::error::Assembled release notes are empty", file=sys.stderr)
+              sys.exit(1)
 
-          new_unreleased = (
+          replacement = (
               "## [Unreleased]\n\n"
               "### Added\n-\n\n"
               "### Changed\n-\n\n"
               "### Fixed\n-\n\n"
-              f"## [{version}] - {date}"
+              f"## [{version}] - {date}\n\n"
+              f"{release_notes}\n"
           )
-          text, n = re.subn(r"^## \[Unreleased\]$", new_unreleased, text, count=1, flags=re.M)
+          # Replace the whole Unreleased section, but leave reference links and
+          # older version sections in place. The exact notes sent to GitHub are
+          # thereby available when a later run resumes this tagged version.
+          text, n = re.subn(
+              r"^## \[Unreleased\]\n.*?(?=^## \[|^\[[^]]+\]:|\Z)",
+              replacement,
+              text,
+              count=1,
+              flags=re.M | re.S,
+          )
           if n != 1:
               print("::error::Could not find '## [Unreleased]' header in CHANGELOG.md", file=sys.stderr)
               sys.exit(1)
@@ -333,6 +390,7 @@ jobs:
       # pivot below). Keeping it local means a failure before/at publish leaves
       # nothing on the remote, so a fresh re-run starts clean.
       - name: Commit and tag the release (local only)
+        if: steps.version.outputs.resume != 'true'
         run: |
           set -euo pipefail
           git config user.name "__Author__"
@@ -344,23 +402,20 @@ jobs:
       # === PIVOT: the single irreversible step ===
       # Publishing to Maven Central cannot be undone (a released version can never be
       # re-pushed), so it is the pivot and every reversible action is ordered around
-      # it. It runs BEFORE the git push and the GitHub Release: if it fails, no
-      # tag/commit has reached the remote and no Release exists, so a re-run is safe
-      # and recomputes the SAME version (the latest tag has not moved). Retries
-      # absorb transient registry/network failures; a version already published
-      # upstream (a prior run that uploaded but failed before tagging) is treated as
-      # success so the run can carry on to tag/Release.
-      #
-      # NOTE: publishToMavenCentral uploads a *staging* deployment you release from
-      # the Central Portal UI (so re-staging is cheap). Swap for
-      # publishAndReleaseToMavenCentral to auto-release — which makes this step
-      # genuinely irreversible and makes the "already published" handling load-bearing.
+      # it. The Gradle publishing configuration auto-releases and waits for the
+      # deployment to reach PUBLISHED; the separate availability check below also
+      # waits for the exact POM to be consumable. Both run BEFORE the git push and the
+      # GitHub Release. If publication fails, no tag/commit has reached the remote
+      # and no Release exists, so a re-run recomputes the SAME version (the latest tag
+      # has not moved). Retries absorb transient registry/network failures.
       - name: Publish to Maven Central (irreversible pivot)
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_PASSWORD }}
+          GROUP: __Group__
+          ARTIFACT: __ProjectName__
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -o pipefail
@@ -373,14 +428,12 @@ jobs:
               exit 0
             fi
             echo "::endgroup::"
-            # Narrowly treat "this version is already published" as success: a prior
-            # run uploaded it but failed before tagging, so re-running must converge,
-            # not loop. VERIFY this pattern against the actual Central Portal error
-            # text before relying on it — it must match the registry's real
-            # duplicate-version phrasing and must NOT match an unrelated "already
-            # exists" (matching too broadly would tag an unpublished version).
-            if grep -qiE 'already been (published|released)|version .*already (exists|published|released)' "$log"; then
-              echo "Version $VERSION already published upstream; treating as success."
+            # Central Portal reports an already-uploaded component as an "Upload
+            # failed" response containing its Maven PURL. Match that exact
+            # coordinate only; unrelated "already exists" text must retry/fail.
+            if bash scripts/check-central-portal-duplicate.sh "$log" "$GROUP" "$ARTIFACT" "$VERSION"; then
+              echo "Central Portal already has ${GROUP}:${ARTIFACT}:${VERSION};"
+              echo "verifying availability before continuing."
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
@@ -389,24 +442,52 @@ jobs:
               sleep "$wait"
             fi
           done
-          echo "::error::Publish failed after 3 attempts. Nothing reached the remote and no Release was created — it is safe to re-run this workflow."
+          echo "::error::Publish failed after 3 attempts. No VCS/GitHub release was created."
+          echo "It is safe to re-run this workflow."
+          exit 1
+
+      # Central Portal can report PUBLISHED before its repository mirrors expose
+      # the files. Do not push the tag or create the GitHub Release until consumers
+      # can fetch this exact version. This also gates the duplicate-version retry
+      # path above: a matching error is not accepted without a real POM response.
+      - name: Verify Maven Central artifact is available (before VCS/GitHub release)
+        env:
+          GROUP: __Group__
+          ARTIFACT: __ProjectName__
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          group_path="${GROUP//./\/}"
+          pom_url="https://repo.maven.apache.org/maven2/${group_path}/${ARTIFACT}/${VERSION}/${ARTIFACT}-${VERSION}.pom"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --location --max-time 30 "$pom_url" -o /dev/null; then
+              echo "Maven Central exposes ${GROUP}:${ARTIFACT}:${VERSION}."
+              exit 0
+            fi
+            if [ "$attempt" -lt 60 ]; then
+              echo "Maven Central has not exposed ${GROUP}:${ARTIFACT}:${VERSION} yet; retrying in 30s."
+              echo "Availability check attempt $attempt/60."
+              sleep 30
+            fi
+          done
+          echo "::error::Maven Central did not expose ${GROUP}:${ARTIFACT}:${VERSION} within 30 minutes."
+          echo "No tag or GitHub Release will be created."
           exit 1
 
       # Reversible VCS write, AFTER the pivot. --atomic guarantees the branch and
       # tag move together (or neither does), so we never advance main while losing
       # the tag. If this is rejected (e.g. branch protection — see the checkout
-      # note), the package is already on Maven Central; re-running recomputes the
-      # SAME version (the tag is not yet on the remote) and the "already published"
-      # handling makes the republish a no-op, so the re-run completes the release.
+      # note), the package is already on Maven Central and the tag is not yet on the
+      # remote, so re-running recomputes the SAME version. If the tag did reach the
+      # remote before a later failure, version detection resumes that tag instead.
       - name: Push the release commit + tag (atomic)
+        if: steps.version.outputs.resume != 'true'
         run: git push --atomic origin HEAD:refs/heads/main "${{ steps.version.outputs.tag }}"
 
       # Final, recreatable step, made idempotent (softprops/action-gh-release
       # upserts: it creates the Release or updates the existing one for this tag) and
-      # not retried by us — the action handles transient failures. By now the package
-      # is published AND the tag is on main, so a blind re-run of the WHOLE workflow
-      # would compute the NEXT version and orphan this release — if this step ever
-      # fails for good, finish the Release by hand from the pushed tag instead.
+      # not retried by us — the action handles transient failures. A whole-workflow
+      # rerun sees the tag without a Release and resumes this same version.
       - name: Create or update the GitHub Release (idempotent)
         uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
         with:
