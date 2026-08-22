@@ -15,9 +15,19 @@
 #       [--github-owner acme] [--description "Widget toolkit"] [--year 2026] [--keep-script]
 #
 # --project-name is required; the rest fall back to sensible defaults so the
-# result always builds. Edit LICENSE / build.gradle.kts afterwards to refine them.
+# result always builds. Author/email/description must be single-line text without
+# control characters. GitHub owner is 1-39 letters/digits with interior hyphens;
+# group is a dot-separated identifier using letters/digits/underscores/hyphens.
+# Quotes, backslashes, and dollar signs remain supported and are context-encoded.
+# Edit LICENSE / build.gradle.kts afterwards to refine the generated metadata.
 
 set -euo pipefail
+
+# Bash 5.2 can treat '&' specially in ${value//pattern/replacement}. Disable that
+# optional behavior so metadata replacement remains literal on every Bash version.
+if shopt -q patsub_replacement 2>/dev/null; then
+  shopt -u patsub_replacement
+fi
 
 project_name=""
 package_name=""
@@ -83,8 +93,39 @@ fi
 [ -n "$github_owner" ] || github_owner="your-org"
 [ -n "$description" ]  || description="TODO: project description"
 [ -n "$year" ]         || year="$(date +%Y)"
+
+# These values are also copied to source/configuration and workflow contexts.
+# Reject characters that could create a new logical line before changing files.
+validate_single_line_metadata() {
+  local option_name="$1"
+  local value="$2"
+  local without_ascii_controls
+
+  case "$value" in
+    *$'\n'*|*$'\r'*|*$'\u0085'*|*$'\u2028'*|*$'\u2029'*)
+      die "invalid $option_name value. Use a single line without control characters." ;;
+  esac
+  without_ascii_controls="$(printf '%s' "$value" | LC_ALL=C tr -d '\001-\037\177')"
+  if [ "$without_ascii_controls" != "$value" ]; then
+    die "invalid $option_name value. Use a single line without control characters."
+  fi
+}
+
+validate_single_line_metadata --author "$author"
+validate_single_line_metadata --author-email "$author_email"
+validate_single_line_metadata --description "$description"
+
+if [ "${#github_owner}" -gt 39 ] ||
+   [[ ! "$github_owner" =~ ^[A-Za-z0-9]+(-[A-Za-z0-9]+)*$ ]]; then
+  die "invalid --github-owner '$github_owner'. Use 1-39 letters or digits with single hyphens only between characters (e.g. acme-tools)."
+fi
+
 [ -n "$group" ]        || group="io.github.$(pkg_segment "$github_owner")"
 [ -n "$package_name" ] || package_name="$group.$(pkg_segment "$project_name")"
+
+if [[ ! "$group" =~ ^[A-Za-z0-9_]+([.-][A-Za-z0-9_]+)*$ ]]; then
+  die "invalid --group '$group'. Use dot-separated letters, digits, underscores, or interior hyphens (e.g. com.acme-tools)."
+fi
 
 # A package is dot-separated identifiers: [a-z_][a-z0-9_]* per segment.
 IFS='.' read -ra _segs <<< "$package_name"
@@ -103,16 +144,28 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 self="$script_dir/$(basename "$0")"
 sibling_ps1="$script_dir/init.ps1"
 
-# Values written into Kotlin-script / TOML files sit inside double-quoted strings
-# — escape backslash then quote so a literal " or \ can't break the script.
-esc() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
-project_e="$(esc "$project_name")"
-group_e="$(esc "$group")"
-author_e="$(esc "$author")"
-author_email_e="$(esc "$author_email")"
-owner_e="$(esc "$github_owner")"
-desc_e="$(esc "$description")"
-year_e="$(esc "$year")"
+# Values written into Kotlin-script / TOML files sit inside double-quoted strings.
+# Kotlin additionally treats $ as string-template syntax, while TOML does not.
+esc_toml() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+esc_kotlin() { esc_toml "$1" | sed 's/\$/\\$/g'; }
+to_base64() { printf '%s' "$1" | base64 | tr -d '\r\n'; }
+
+project_k="$(esc_kotlin "$project_name")"
+group_k="$(esc_kotlin "$group")"
+author_k="$(esc_kotlin "$author")"
+author_email_k="$(esc_kotlin "$author_email")"
+owner_k="$(esc_kotlin "$github_owner")"
+desc_k="$(esc_kotlin "$description")"
+year_k="$(esc_kotlin "$year")"
+project_t="$(esc_toml "$project_name")"
+group_t="$(esc_toml "$group")"
+author_t="$(esc_toml "$author")"
+author_email_t="$(esc_toml "$author_email")"
+owner_t="$(esc_toml "$github_owner")"
+desc_t="$(esc_toml "$description")"
+year_t="$(esc_toml "$year")"
+author_b64="$(to_base64 "$author")"
+author_email_b64="$(to_base64 "$author_email")"
 
 echo "==> Initializing template as '$project_name' (package $package_name)"
 
@@ -176,8 +229,9 @@ while IFS= read -r -d '' file; do
     *.jar|*.png|*.jpg|*.gif|*.ico|*.zip) continue ;;
   esac
   case "$file" in
-    *.kts|*.toml) p=$project_e; g=$group_e; a=$author_e; ae=$author_email_e; o=$owner_e; d=$desc_e; y=$year_e ;;
-    *)            p=$project_name; g=$group; a=$author; ae=$author_email; o=$github_owner; d=$description; y=$year ;;
+    *.kts)  p=$project_k; g=$group_k; a=$author_k; ae=$author_email_k; o=$owner_k; d=$desc_k; y=$year_k ;;
+    *.toml) p=$project_t; g=$group_t; a=$author_t; ae=$author_email_t; o=$owner_t; d=$desc_t; y=$year_t ;;
+    *)      p=$project_name; g=$group; a=$author; ae=$author_email; o=$github_owner; d=$description; y=$year ;;
   esac
   # Preserve trailing newlines: append a sentinel before capture, strip it after.
   if ! content="$(cat "$file" || exit 1; printf x)"; then
@@ -189,6 +243,8 @@ while IFS= read -r -d '' file; do
   content="${content//__ProjectName__/$p}"
   content="${content//__PackageName__/$package_name}"
   content="${content//__Group__/$g}"
+  content="${content//__AuthorBase64__/$author_b64}"
+  content="${content//__AuthorEmailBase64__/$author_email_b64}"
   content="${content//__Author__/$a}"
   content="${content//__AuthorEmail__/$ae}"
   content="${content//__GitHubOwner__/$o}"
