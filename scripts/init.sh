@@ -31,6 +31,10 @@ keep_script=0
 
 die() { echo "error: $*" >&2; exit 1; }
 
+destination_exists() {
+  [ -e "$1" ] || [ -L "$1" ]
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --project-name)  project_name="${2:-}"; shift 2 ;;
@@ -137,7 +141,7 @@ if [ -d "$src_root" ]; then
   for dir in "${package_dirs[@]}"; do
     parent="$(dirname "$dir")"
     dest="$parent/$pkg_rel_path"
-    if [ -e "$dest" ] || [ -L "$dest" ]; then
+    if destination_exists "$dest"; then
       die "cannot move '$dir': destination '$dest' already exists"
     fi
   done
@@ -195,10 +199,16 @@ echo "    Updated contents in $changed file(s)."
 for dir in "${package_dirs[@]}"; do
     parent="$(dirname "$dir")"
     dest="$parent/$pkg_rel_path"
+    if destination_exists "$dest"; then
+      die "refusing to overwrite existing destination '$dest' while moving package '$dir'"
+    fi
     mkdir -p "$(dirname "$dest")"
-    mv "$dir" "$dest"
+    mv -i "$dir" "$dest" < /dev/null
     if [ -e "$dir" ] || [ -L "$dir" ]; then
       die "move reported success but source directory '$dir' still exists"
+    fi
+    if destination_exists "$dest/__PackageName__"; then
+      die "package move placed the source below an existing destination '$dest'"
     fi
     echo "    Moved ${parent#"$repo_root"/}/__PackageName__ -> ${parent#"$repo_root"/}/$pkg_rel_path"
 done

@@ -104,8 +104,46 @@ run_failure_case() {
   assert_failure_tree "$case_dir"
 }
 
+assert_conflict_tree() {
+  local case_dir="$1"
+  local main_source="$case_dir/src/main/kotlin/$placeholder"
+  local destination_file="$case_dir/src/main/kotlin/com/example/nested/Greeter.kt"
+
+  [ -d "$main_source" ] || die "destination-conflict case removed the source package"
+  [ -f "$destination_file" ] || die "destination-conflict case removed the existing destination file"
+  grep -Fxq 'keep this destination file' "$destination_file" || die "existing destination file was overwritten"
+  [ -f "$case_dir/TEMPLATE.md" ] || die "destination-conflict case removed TEMPLATE.md"
+  [ -f "$case_dir/scripts/init.sh" ] || die "destination-conflict case removed init.sh"
+  [ -f "$case_dir/scripts/init.ps1" ] || die "destination-conflict case removed init.ps1"
+  grep -Fq "$project_placeholder" "$case_dir/README.md" || die "destination-conflict case partially replaced file contents"
+}
+
+run_conflict_case() {
+  local shell_name="$1"
+  local case_dir="$test_root/conflict-$shell_name"
+  local output
+  copy_template "$case_dir"
+  mkdir -p "$case_dir/src/main/kotlin/$placeholder"
+  mkdir -p "$case_dir/src/main/kotlin/com/example/nested"
+  printf 'keep this destination file\n' > "$case_dir/src/main/kotlin/com/example/nested/Greeter.kt"
+
+  if [ "$shell_name" = bash ]; then
+    if output="$(bash "$case_dir/scripts/init.sh" --project-name nested-check --package-name "$package_name" --keep-script 2>&1)"; then
+      die "POSIX initializer overwrote or accepted an existing destination file"
+    fi
+  else
+    if output="$("$pwsh_command" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$(to_native_path "$case_dir/scripts/init.ps1")" -ProjectName nested-check -PackageName "$package_name" -KeepScript 2>&1)"; then
+      die "PowerShell initializer overwrote or accepted an existing destination file"
+    fi
+  fi
+  printf '%s\n' "$output" | grep -Fqi 'destination' || die "$shell_name conflict error did not identify the destination"
+  assert_conflict_tree "$case_dir"
+}
+
 run_success_case bash
 run_success_case powershell
 run_failure_case bash
 run_failure_case powershell
-echo "Initializer checks passed for POSIX and PowerShell (nested transfer and fail-closed nested placeholder)."
+run_conflict_case bash
+run_conflict_case powershell
+echo "Initializer checks passed for POSIX and PowerShell (clean transfer, nested validation, and destination conflict protection)."
