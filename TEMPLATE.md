@@ -208,21 +208,21 @@ Release. The order is:
 2. **Build + test**, then **validate the publication with no upload** (a signed
    `publishToMavenLocal`) so packaging / POM / signing errors surface cheaply.
 3. **Publish to Maven Central** — the pivot. Retried for transient failures; a
-   version already published upstream is treated as success.
+   Central duplicate is treated as success only when the response names the exact
+   Maven coordinate, then the exact Maven Central POM is checked for availability.
 4. **Tag + push** (idempotent) and **GitHub Release** (upserts).
 
 Because nothing reaches the registry, a tag, or a Release before the pivot, **any
 pre-pivot failure leaves no trace** — just re-run. And because the version is an
-explicit `workflow_dispatch` input (never auto-bumped from a manifest), **re-running
-the whole workflow after a partial failure is also safe**: it can't skip or orphan a
-version number. The lone manual case: if only the *GitHub Release* step fails for
-good, the artifact is already published and the tag already pushed, so you can just
-publish the Release by hand from the tag instead of re-running.
+explicitly derived from the latest completed tag, **re-running the whole workflow
+after a partial failure is also safe**: a latest tag without a GitHub Release is
+checked out and resumed at that same version, while a tag with its Release starts
+the requested next bump. This prevents a failed final step from orphaning a version
+or publishing an unintended successor.
 
-If you switch the publish task to `publishAndReleaseToMavenCentral` (auto-release),
-verify that the "already published" detection in the publish step matches the
-Central Portal's actual duplicate-version wording — it must recognise a genuine
-re-run but must not match unrelated "already exists" noise.
+The workflow uses Central Portal automatic release with `DeploymentValidation.PUBLISHED`.
+The duplicate retry path matches Central Portal's component PURL for the exact
+coordinate and still requires the public Maven Central POM before any tag or Release.
 
 ## Optional pieces — remove what you don't need
 
