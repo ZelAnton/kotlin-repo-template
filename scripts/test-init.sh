@@ -296,6 +296,8 @@ run_metadata_failure_case bash author-newline --author $'safe\nrun: injected' 's
 run_metadata_failure_case powershell author-newline --author $'safe\nrun: injected' 'single line'
 run_metadata_failure_case bash description-tab --description $'safe\tinjected' 'single line'
 run_metadata_failure_case powershell description-tab --description $'safe\tinjected' 'single line'
+run_metadata_failure_case bash description-c1 --description $'safe\u009binjected' 'single line'
+run_metadata_failure_case powershell description-c1 --description $'safe\u009binjected' 'single line'
 run_metadata_failure_case bash owner-quote --github-owner 'acme"owner' 'github-owner'
 run_metadata_failure_case powershell owner-quote --github-owner 'acme"owner' 'GitHubOwner'
 run_metadata_failure_case bash owner-too-long --github-owner 'a123456789012345678901234567890123456789' 'github-owner'

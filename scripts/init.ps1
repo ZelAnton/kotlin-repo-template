@@ -94,10 +94,10 @@ if (-not $GitHubOwner) { $GitHubOwner = 'your-org' }
 if (-not $Description) { $Description = 'TODO: project description' }
 
 # Free-form metadata is copied to human-readable files and source/configuration
-# strings. Newlines and control characters cannot be represented safely in all
-# of those contexts, so reject them before any file is changed or package moved.
+# strings. Unicode control characters (Cc) and logical line separators cannot be
+# represented safely in all contexts, so reject them before changing any files.
 function Assert-SingleLineMetadata([string]$parameterName, [string]$value) {
-    if ($value -match '[\x00-\x1F\x7F\u0085\u2028\u2029]') {
+    if ($value -match '[\p{Cc}\u2028\u2029]') {
         throw "Invalid -$parameterName value. Use a single line without control characters."
     }
 }

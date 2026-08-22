@@ -95,20 +95,31 @@ fi
 [ -n "$year" ]         || year="$(date +%Y)"
 
 # These values are also copied to source/configuration and workflow contexts.
-# Reject characters that could create a new logical line before changing files.
+# Reject Unicode control characters (Cc) and logical line separators before
+# changing files or moving package directories.
 validate_single_line_metadata() {
   local option_name="$1"
   local value="$2"
   local without_ascii_controls
+  local code_point
+  local code_point_octal
+  local control_character
 
   case "$value" in
-    *$'\n'*|*$'\r'*|*$'\u0085'*|*$'\u2028'*|*$'\u2029'*)
+    *$'\u2028'*|*$'\u2029'*)
       die "invalid $option_name value. Use a single line without control characters." ;;
   esac
   without_ascii_controls="$(printf '%s' "$value" | LC_ALL=C tr -d '\001-\037\177')"
   if [ "$without_ascii_controls" != "$value" ]; then
     die "invalid $option_name value. Use a single line without control characters."
   fi
+  for ((code_point = 0x80; code_point <= 0x9f; code_point++)); do
+    printf -v code_point_octal '%03o' "$code_point"
+    printf -v control_character '%b' "\\302\\$code_point_octal"
+    if [[ "$value" == *"$control_character"* ]]; then
+      die "invalid $option_name value. Use a single line without control characters."
+    fi
+  done
 }
 
 validate_single_line_metadata --author "$author"
