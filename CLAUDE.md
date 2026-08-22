@@ -93,12 +93,17 @@ the build if the Kotlin and Java targets disagree.
 
 ## Dependencies and versions
 
-All dependency and plugin **versions** live in `gradle/libs.versions.toml` (the
-Gradle *version catalog* — the Kotlin analogue of .NET Central Package
-Management). Build scripts reference them as `libs.<alias>` /
-`libs.plugins.<alias>` and never hard-code a version inline. It is **not** a
-fixed allow-list — add the production and test dependencies the project actually
-needs, each as a catalog entry.
+Project dependency and build-plugin **versions** live in
+`gradle/libs.versions.toml` (the Gradle *version catalog* — the Kotlin analogue
+of .NET Central Package Management). Build scripts reference them as
+`libs.<alias>` / `libs.plugins.<alias>` and never hard-code a version inline. The
+Foojay settings plugin is the intentional exception: its one authoritative
+version remains on the plugin declaration in `settings.gradle.kts`, because
+settings plugins cannot use project catalog aliases. Do not duplicate it in the
+catalog; run `scripts/check-foojay-single-source.ps1` or
+`scripts/check-foojay-single-source.sh` after changing it. It is **not** a fixed
+allow-list — add the production and test dependencies the project actually needs,
+each as a catalog entry.
 
 The JUnit 6 (Jupiter) test stack is wired through the catalog's `junit-bom`, so
 individual `junit-*` artifacts are declared without their own versions.

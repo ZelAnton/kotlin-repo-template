@@ -26,8 +26,10 @@ deleted from downstream repos by the init script).
 ## What the template actually is
 
 - A single-module Kotlin/JVM **library** crate-equivalent.
-- Build: `build.gradle.kts` + `settings.gradle.kts`, versions in
-  `gradle/libs.versions.toml` (version catalog).
+- Build: `build.gradle.kts` + `settings.gradle.kts`, with project dependency and
+  build-plugin versions in `gradle/libs.versions.toml` (version catalog). Foojay
+  is the intentional settings-plugin exception: its only version is declared
+  in `settings.gradle.kts`, where project catalog aliases are unavailable.
 - Toolchain: Kotlin 2.4, Gradle 9.5.1 (wrapper), JDK 25 via `jvmToolchain(25)`.
 - Style: spaces (4), ktlint, `explicitApi()` strict, warnings-as-errors.
 - Tests: JUnit 6 via a BOM + `useJUnitPlatform()`, `kotlin("test")`.

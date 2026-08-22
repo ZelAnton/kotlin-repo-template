@@ -156,8 +156,13 @@ and untrack before the first commit.
   `settings.gradle.kts` replace the `.csproj`/`.slnx`; a **Gradle wrapper**
   (`./gradlew`) pins the Gradle version the way `global.json` pins the .NET SDK.
 - **Version catalog instead of Central Package Management.**
-  `gradle/libs.versions.toml` is the single source of dependency/plugin versions;
-  build scripts use `libs.*` aliases.
+  `gradle/libs.versions.toml` is the single source of project dependency and
+  build-plugin versions; build scripts use `libs.*` aliases. Foojay is the
+  intentional settings-plugin exception: its one authoritative version stays
+  on the plugin declaration in `settings.gradle.kts`, because settings plugins
+  cannot use project catalog aliases. Do not add a second Foojay version to the
+  catalog. Verify this contract with `scripts/check-foojay-single-source.ps1`
+  or `scripts/check-foojay-single-source.sh`.
 - **Spaces, not tabs.** Kotlin official style (and ktlint) use 4-space indent, so
   this template indents with spaces — the same exception the F# template makes.
 - **Source layout follows the JVM convention:** `src/main/kotlin/<package>` and
