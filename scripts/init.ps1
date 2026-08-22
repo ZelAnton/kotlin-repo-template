@@ -139,6 +139,36 @@ function Test-Excluded([string]$fullPath) {
     return $false
 }
 
+$pkgRelPath = $PackageName.Replace('.', [IO.Path]::DirectorySeparatorChar)
+$srcRoot = Join-Path $repoRoot 'src'
+$packageDirs = @()
+if (Test-Path -LiteralPath $srcRoot -PathType Container) {
+    $expectedPackageDirs = @(
+        (Join-Path $srcRoot 'main/kotlin/__PackageName__'),
+        (Join-Path $srcRoot 'test/kotlin/__PackageName__')
+    )
+    foreach ($expected in $expectedPackageDirs) {
+        if (Test-Path -LiteralPath $expected -PathType Leaf) {
+            throw "Expected package path '$expected' is a file, not a directory."
+        }
+        if (Test-Path -LiteralPath $expected -PathType Container) {
+            $dir = Get-Item -LiteralPath $expected -Force -ErrorAction Stop
+            $nestedTokenDirs = @(Get-ChildItem -LiteralPath $dir.FullName -Directory -Recurse -Force -ErrorAction Stop |
+                Where-Object { $_.Name -eq '__PackageName__' })
+            if ($nestedTokenDirs.Count -gt 0) {
+                throw "Unsupported nested __PackageName__ directory '$($nestedTokenDirs[0].FullName)'. The package placeholder must occur only at the direct source root."
+            }
+            $packageDirs += $dir
+        }
+    }
+    foreach ($dir in $packageDirs) {
+        $dest = Join-Path $dir.Parent.FullName $pkgRelPath
+        if (Test-Path -LiteralPath $dest) {
+            throw "Cannot move '$($dir.FullName)': destination '$dest' already exists."
+        }
+    }
+}
+
 Write-Host "==> Initializing template as '$ProjectName' (package $PackageName)" -ForegroundColor Cyan
 
 # 1) Replace tokens in file contents. Both initializers are skipped: they carry
@@ -171,20 +201,15 @@ Write-Host "    Updated contents in $contentChanged file(s)." -ForegroundColor D
 #    tree (e.g. src/main/kotlin/__PackageName__ -> src/main/kotlin/com/acme/widgets).
 #    This is the Kotlin-specific step: a JVM source file must live in a directory
 #    path matching its `package` declaration.
-$pkgRelPath = $PackageName.Replace('.', [IO.Path]::DirectorySeparatorChar)
-$srcRoot = Join-Path $repoRoot 'src'
-if (Test-Path $srcRoot) {
-    $tokenDirs = Get-ChildItem -Path $srcRoot -Directory -Recurse | Where-Object { $_.Name -eq '__PackageName__' }
-    foreach ($dir in $tokenDirs) {
+foreach ($dir in $packageDirs) {
         $dest = Join-Path $dir.Parent.FullName $pkgRelPath
-        New-Item -ItemType Directory -Path $dest -Force | Out-Null
-        Get-ChildItem -LiteralPath $dir.FullName -File | ForEach-Object {
-            Move-Item -LiteralPath $_.FullName -Destination $dest -Force
+        New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
+        Move-Item -LiteralPath $dir.FullName -Destination $dest
+        if (Test-Path -LiteralPath $dir.FullName) {
+            throw "Move reported success but source directory '$($dir.FullName)' still exists."
         }
-        Remove-Item -LiteralPath $dir.FullName -Recurse -Force
         $relParent = $dir.Parent.FullName.Substring($repoRoot.Length).TrimStart('\', '/')
         Write-Host "    Moved $relParent/__PackageName__ -> $relParent/$($PackageName.Replace('.', '/'))" -ForegroundColor DarkGray
-    }
 }
 
 # 3) Activate Claude Code shared settings if shipped as a .template.

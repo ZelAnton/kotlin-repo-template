@@ -112,10 +112,46 @@ year_e="$(esc "$year")"
 
 echo "==> Initializing template as '$project_name' (package $package_name)"
 
-# 1) Replace tokens in file contents. Both initializers are skipped: they carry
+# 1) Validate the package roots before making any content changes. Only the two
+#    expected source roots are supported; a nested placeholder is ambiguous and
+#    must fail before the checkout is partially initialized.
+pkg_rel_path="$(printf '%s' "$package_name" | tr '.' '/')"
+src_root="$repo_root/src"
+package_dirs=()
+if [ -d "$src_root" ]; then
+  token_dirs_file="$(mktemp)"
+  if ! find "$src_root" -type d -name '__PackageName__' -print0 > "$token_dirs_file"; then
+    rm -f "$token_dirs_file"
+    die "unable to inspect Kotlin package directories"
+  fi
+  while IFS= read -r -d '' dir; do
+    case "$dir" in
+      "$src_root/main/kotlin/__PackageName__"|"$src_root/test/kotlin/__PackageName__")
+        package_dirs+=("$dir") ;;
+      *)
+        rm -f "$token_dirs_file"
+        die "unsupported nested or misplaced __PackageName__ directory '$dir'. The package placeholder must be the direct source root." ;;
+    esac
+  done < "$token_dirs_file"
+  rm -f "$token_dirs_file"
+  for dir in "${package_dirs[@]}"; do
+    parent="$(dirname "$dir")"
+    dest="$parent/$pkg_rel_path"
+    if [ -e "$dest" ] || [ -L "$dest" ]; then
+      die "cannot move '$dir': destination '$dest' already exists"
+    fi
+  done
+fi
+
+# 2) Replace tokens in file contents. Both initializers are skipped: they carry
 #    the literal token strings as search keys, so substituting inside them would
 #    corrupt the sibling script.
 changed=0
+content_files="$(mktemp)"
+if ! find "$repo_root" -type d \( -name .git -o -name .jj -o -name build -o -name .gradle -o -name .idea \) -prune -o -type f -print0 > "$content_files"; then
+  rm -f "$content_files"
+  die "unable to enumerate template files"
+fi
 while IFS= read -r -d '' file; do
   case "$file" in
     "$self"|"$sibling_ps1") continue ;;
@@ -131,7 +167,11 @@ while IFS= read -r -d '' file; do
     *)            p=$project_name; g=$group; a=$author; ae=$author_email; o=$github_owner; d=$description; y=$year ;;
   esac
   # Preserve trailing newlines: append a sentinel before capture, strip it after.
-  content="$(cat "$file"; printf x)"; content="${content%x}"
+  if ! content="$(cat "$file" || exit 1; printf x)"; then
+    rm -f "$content_files"
+    die "unable to read '$file'"
+  fi
+  content="${content%x}"
   orig="$content"
   content="${content//__ProjectName__/$p}"
   content="${content//__PackageName__/$package_name}"
@@ -145,31 +185,31 @@ while IFS= read -r -d '' file; do
     printf '%s' "$content" > "$file"
     changed=$((changed + 1))
   fi
-done < <(find "$repo_root" -type d \( -name .git -o -name .jj -o -name build -o -name .gradle -o -name .idea \) -prune -o -type f -print0)
+done < "$content_files"
+rm -f "$content_files"
 echo "    Updated contents in $changed file(s)."
 
-# 2) Move the token-named Kotlin package directory into the real dotted-package
+# 3) Move the token-named Kotlin package directory into the real dotted-package
 #    tree (e.g. src/main/kotlin/__PackageName__ -> src/main/kotlin/com/acme/widgets).
 #    A JVM source file must live in a directory matching its `package` declaration.
-pkg_rel_path="$(printf '%s' "$package_name" | tr '.' '/')"
-if [ -d "$repo_root/src" ]; then
-  while IFS= read -r -d '' dir; do
+for dir in "${package_dirs[@]}"; do
     parent="$(dirname "$dir")"
     dest="$parent/$pkg_rel_path"
-    mkdir -p "$dest"
-    find "$dir" -maxdepth 1 -type f -exec mv {} "$dest/" \;
-    rm -rf "$dir"
+    mkdir -p "$(dirname "$dest")"
+    mv "$dir" "$dest"
+    if [ -e "$dir" ] || [ -L "$dir" ]; then
+      die "move reported success but source directory '$dir' still exists"
+    fi
     echo "    Moved ${parent#"$repo_root"/}/__PackageName__ -> ${parent#"$repo_root"/}/$pkg_rel_path"
-  done < <(find "$repo_root/src" -type d -name '__PackageName__' -print0)
-fi
+done
 
-# 3) Activate Claude Code shared settings if shipped as a .template.
+# 4) Activate Claude Code shared settings if shipped as a .template.
 if [ -f "$repo_root/.claude/settings.json.template" ]; then
   mv -f "$repo_root/.claude/settings.json.template" "$repo_root/.claude/settings.json"
   echo "    Activated .claude/settings.json"
 fi
 
-# 4) Remove template-only files (the agent guide is template meta — pitfalls are
+# 5) Remove template-only files (the agent guide is template meta — pitfalls are
 #    logged back to the *template's* copy, so the downstream repo drops it).
 rm -f "$repo_root/TEMPLATE.md" "$repo_root/docs/AGENT-INIT-GUIDE.md"
 rmdir "$repo_root/docs" 2>/dev/null || true
@@ -195,7 +235,7 @@ echo "  4. Replace src/main/kotlin/.../Greeter.kt with your real API and"
 echo "     update the sample test."
 echo "  5. Fill the Architecture section of CLAUDE.md, then commit."
 
-# 5) Remove both initializers unless asked to keep them.
+# 6) Remove both initializers unless asked to keep them.
 if [ "$keep_script" -ne 1 ]; then
   rm -f "$sibling_ps1"
   rm -f "$self"
