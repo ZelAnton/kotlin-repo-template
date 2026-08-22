@@ -36,11 +36,78 @@ release_line=$(grep -nF 'name: Create or update the GitHub Release (idempotent)'
 
 grep -qF 'gh release view "$LATEST_TAG"' "$workflow" || fail "rerun release lookup is missing"
 grep -qF 'Resuming the exact tagged version' "$workflow" || fail "same-version resume path is missing"
+grep -qF 'sort -V -r' "$workflow" || fail "stable tags are not version-sorted"
 grep -qF 'bash scripts/check-central-portal-duplicate.sh' "$workflow" || fail "exact Central duplicate matcher is not used"
 grep -qF 'DeploymentValidation.PUBLISHED' "$repo_root/build.gradle.kts" || fail "Central publication validation is missing"
 grep -qF 'NOTES_FILE: ${{ steps.notes.outputs.path }}' "$workflow" || fail "promoted release notes are not persisted"
 grep -qF 'pathlib.Path(os.environ["NOTES_FILE"])' "$workflow" || fail "promotion does not read the assembled notes"
 grep -qF 'steps.version.outputs.resume != '\''true'\'' && steps.changelog.outputs.has_manual == '\''false'\''' "$workflow" || fail "resume incorrectly runs git-cliff"
+
+# Execute the workflow's real version-detection block against prerelease,
+# stable, resume, and first-release tag sets. This keeps the test aligned with
+# the shell that runs in Actions instead of reimplementing its version logic.
+temp_dir=$(mktemp -d)
+cleanup() {
+  rm -rf "$temp_dir"
+}
+trap cleanup EXIT
+
+version_script="$temp_dir/determine-version.sh"
+awk '
+  /^      - name: Determine next version$/ { in_step=1; next }
+  in_step && /^      - name:/ { exit }
+  in_step && /^        run: \|$/ { in_run=1; next }
+  in_run && /^          / { sub(/^          /, ""); print; next }
+  in_run { exit }
+' "$workflow" > "$version_script"
+sed -i 's/\${{ inputs.bump }}/${INPUT_BUMP}/g' "$version_script"
+
+run_determine_version_case() {
+  local case_name=$1
+  local tags=$2
+  local expected_current=$3
+  local expected_version=$4
+  local expected_resume=$5
+  local release_exists=$6
+  local case_dir="$temp_dir/version-$case_name"
+  local output_file="$case_dir/github-output"
+
+  mkdir -p "$case_dir/bin"
+  git -C "$case_dir" init -q
+  git -C "$case_dir" -c user.name=test -c user.email=test@example.invalid commit --allow-empty -qm initial
+  printf '%s\n' 'val version = providers.gradleProperty("version").getOrElse("0.1.0")' > "$case_dir/build.gradle.kts"
+  git -C "$case_dir" add build.gradle.kts
+  git -C "$case_dir" -c user.name=test -c user.email=test@example.invalid commit -qm build
+  for tag in $tags; do
+    git -C "$case_dir" tag "$tag"
+  done
+
+  cat > "$case_dir/bin/gh" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${1-}" == release && "${2-}" == view && "${GH_RELEASE_EXISTS:-false}" == true ]]; then
+  exit 0
+fi
+exit 1
+EOF
+  chmod +x "$case_dir/bin/gh"
+  : > "$output_file"
+  (
+    cd "$case_dir"
+    PATH="$case_dir/bin:$PATH" GH_RELEASE_EXISTS="$release_exists" INPUT_BUMP=patch \
+      GITHUB_OUTPUT="$output_file" bash "$version_script"
+  ) || fail "$case_name version detection failed"
+
+  grep -qF "current=$expected_current" "$output_file" || fail "$case_name selected the wrong current version"
+  grep -qF "version=$expected_version" "$output_file" || fail "$case_name computed the wrong next version"
+  grep -qF "tag=v$expected_version" "$output_file" || fail "$case_name computed the wrong tag"
+  grep -qF "resume=$expected_resume" "$output_file" || fail "$case_name selected the wrong resume mode"
+}
+
+run_determine_version_case prerelease-and-stable \
+  'v9.9.9-rc.1 v8.8.8+build v1.2.3-rc v1.2.3' 1.2.3 1.2.4 false true
+run_determine_version_case resume-after-prerelease \
+  'v4.0.0-beta v4.0.0' 4.0.0 4.0.0 true false
+run_determine_version_case first-release '' 0.0.0 0.1.0 false false
 
 # Execute the workflow's real promotion block against both kinds of assembled
 # notes, then run the same version-section extraction used by a resume. This
