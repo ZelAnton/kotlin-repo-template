@@ -147,6 +147,15 @@ if [ -d "$src_root" ]; then
   done
 fi
 
+# Validate settings activation before changing any template contents or moving
+# package directories. A user-owned settings file must never be replaced by the
+# shipped template during initialization.
+claude_template="$repo_root/.claude/settings.json.template"
+claude_settings="$repo_root/.claude/settings.json"
+if [ -f "$claude_template" ] && destination_exists "$claude_settings"; then
+  die "cannot activate Claude settings: destination '$claude_settings' already exists; the existing user file was preserved"
+fi
+
 # 2) Replace tokens in file contents. Both initializers are skipped: they carry
 #    the literal token strings as search keys, so substituting inside them would
 #    corrupt the sibling script.
@@ -214,8 +223,16 @@ for dir in "${package_dirs[@]}"; do
 done
 
 # 4) Activate Claude Code shared settings if shipped as a .template.
-if [ -f "$repo_root/.claude/settings.json.template" ]; then
-  mv -f "$repo_root/.claude/settings.json.template" "$repo_root/.claude/settings.json"
+if [ -f "$claude_template" ]; then
+  if destination_exists "$claude_settings"; then
+    die "cannot activate Claude settings: destination '$claude_settings' already exists; the existing user file was preserved"
+  fi
+  if ! mv -i "$claude_template" "$claude_settings" < /dev/null; then
+    die "unable to activate Claude settings template '$claude_template'"
+  fi
+  if destination_exists "$claude_template"; then
+    die "refusing to overwrite existing destination '$claude_settings' while activating settings template"
+  fi
   echo "    Activated .claude/settings.json"
 fi
 

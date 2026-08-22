@@ -169,6 +169,15 @@ if (Test-Path -LiteralPath $srcRoot -PathType Container) {
     }
 }
 
+# Validate settings activation before changing any template contents or moving
+# package directories. A user-owned settings file must never be replaced by the
+# shipped template during initialization.
+$claudeTemplate = Join-Path $repoRoot '.claude/settings.json.template'
+$claudeSettings = Join-Path $repoRoot '.claude/settings.json'
+if ((Test-Path -LiteralPath $claudeTemplate -PathType Leaf) -and (Test-Path -LiteralPath $claudeSettings)) {
+    throw "Cannot activate Claude settings: destination '$claudeSettings' already exists; the existing user file was preserved."
+}
+
 Write-Host "==> Initializing template as '$ProjectName' (package $PackageName)" -ForegroundColor Cyan
 
 # 1) Replace tokens in file contents. Both initializers are skipped: they carry
@@ -220,9 +229,11 @@ foreach ($dir in $packageDirs) {
 }
 
 # 3) Activate Claude Code shared settings if shipped as a .template.
-$claudeTemplate = Join-Path $repoRoot '.claude/settings.json.template'
-if (Test-Path $claudeTemplate) {
-    Move-Item -LiteralPath $claudeTemplate -Destination (Join-Path $repoRoot '.claude/settings.json') -Force
+if (Test-Path -LiteralPath $claudeTemplate -PathType Leaf) {
+    if (Test-Path -LiteralPath $claudeSettings) {
+        throw "Cannot activate Claude settings: destination '$claudeSettings' already exists; the existing user file was preserved."
+    }
+    Move-Item -LiteralPath $claudeTemplate -Destination $claudeSettings -ErrorAction Stop
     Write-Host "    Activated .claude/settings.json" -ForegroundColor DarkGray
 }
 
