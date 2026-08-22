@@ -19,9 +19,6 @@ ktlint-plugin = "14.2.0"
 # Central Portal (the only path since OSSRH shut down); this plugin can. 0.34+
 # supports Gradle 9.
 maven-publish-plugin = "0.37.0"
-# Foojay toolchain resolver — lets Gradle DOWNLOAD the JDK 25 toolchain when it
-# isn't already installed (jvmToolchain(25) only declares the requirement).
-foojay-resolver = "1.0.0"
 # Binary Compatibility Validator — dumps the public ABI to api/*.api and fails
 # the build on an unintended change. The standalone plugin is frozen (folded
 # into the Kotlin Gradle Plugin 2.2+), but its maintainers recommend it for
@@ -49,7 +46,3 @@ ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-plugin" }
 maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish-plugin" }
 binary-compatibility-validator = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binary-compatibility-validator" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
-
-# Note: the foojay-resolver plugin is applied in settings.gradle.kts (a settings
-# plugin), so it is referenced there by id/version directly rather than via this
-# catalog — `libs` is not available in settings at plugin-application time.
