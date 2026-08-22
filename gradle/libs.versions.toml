@@ -1,6 +1,9 @@
-# Gradle version catalog — the single place every dependency and plugin version
-# is declared (the Kotlin analogue of .NET Central Package Management). Build
-# scripts reference these as `libs.<alias>` / `libs.plugins.<alias>`.
+# Gradle version catalog — the single place every project dependency and
+# build-plugin version is declared (the Kotlin analogue of .NET Central Package
+# Management). Build scripts reference these as `libs.<alias>` /
+# `libs.plugins.<alias>`. The Foojay settings-plugin version is the intentional
+# exception; its authoritative declaration lives in settings.gradle.kts because
+# settings plugins cannot use these project catalog aliases.
 #
 # This is NOT a fixed allow-list — add the production and test dependencies your
 # project actually needs. The entries below are only the template's own stack

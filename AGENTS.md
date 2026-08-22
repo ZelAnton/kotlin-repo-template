@@ -120,9 +120,18 @@ build; fix it rather than suppressing it.
 
 ## Dependencies and versions
 
-- **All versions live in `gradle/libs.versions.toml`** (the version catalog).
-  Reference them as `libs.<alias>` / `libs.plugins.<alias>`; never hard-code a
-  version inline in `build.gradle.kts`.
+- **Project dependency and build-plugin versions live in
+  `gradle/libs.versions.toml`** (the version catalog). Reference them as
+  `libs.<alias>` / `libs.plugins.<alias>`; never hard-code a version inline in
+  `build.gradle.kts`.
+- **Foojay is the intentional settings-plugin exception.** Gradle does not
+  expose the version catalog's plugin aliases to the `plugins {}` block in
+  `settings.gradle.kts`, so the single authoritative Foojay version is the
+  literal on the `org.gradle.toolchains.foojay-resolver-convention` line in
+  `settings.gradle.kts`. Do not add a `foojay-resolver` entry to the catalog or
+  duplicate that version elsewhere. Run
+  `pwsh ./scripts/check-foojay-single-source.ps1` (or
+  `bash ./scripts/check-foojay-single-source.sh`) after changing it.
 - It is **not** a fixed allow-list — add what the project needs, each as a
   catalog entry. Give a non-obvious dependency a short comment on why it's there.
 - JUnit 6 is aligned through `junit-bom`; declare `junit-*` artifacts without

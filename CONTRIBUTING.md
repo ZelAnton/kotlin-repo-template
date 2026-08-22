@@ -36,10 +36,14 @@ with:
 - **`explicitApi()` is on (strict)** — every public declaration must spell out
   its visibility modifier and return type. Keep the public surface small; mark
   internals `internal` or `private`.
-- **Dependencies** use the Gradle version catalog — declare versions only in
-  [`gradle/libs.versions.toml`](gradle/libs.versions.toml) and reference them as
-  `libs.<alias>` / `libs.plugins.<alias>`; never hard-code a version inline in
-  `build.gradle.kts`.
+- **Dependencies and build plugins** use the Gradle version catalog — declare
+  their versions in [`gradle/libs.versions.toml`](gradle/libs.versions.toml) and
+  reference them as `libs.<alias>` / `libs.plugins.<alias>`; never hard-code a
+  version inline in `build.gradle.kts`. Foojay is the intentional exception:
+  its sole version is on the settings-plugin declaration in
+  `settings.gradle.kts`, since settings plugins cannot use project catalog
+  aliases. Do not add a catalog duplicate; verify changes with
+  `scripts/check-foojay-single-source.ps1` or `scripts/check-foojay-single-source.sh`.
 - See [`AGENTS.md`](AGENTS.md) for the full, authoritative set of conventions
   (exception-handling style, comments, architecture).
 
