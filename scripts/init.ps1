@@ -36,7 +36,8 @@
 .PARAMETER Author
     Author for LICENSE / POM. Defaults to `git config user.name`, else "Your Name".
     Must be a single line without control characters. Quotes, backslashes, and
-    dollar signs are preserved and encoded for generated source/workflow contexts.
+    dollar signs are preserved and encoded for generated source/workflow contexts;
+    free-form metadata is never inserted into AGENTS.md or CLAUDE.md.
 
 .PARAMETER AuthorEmail
     Author email (release-commit identity in release.yml). Defaults to
@@ -135,6 +136,10 @@ foreach ($seg in ($PackageName -split '\.')) {
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $selfPath = $PSCommandPath
 $siblingSh = Join-Path $PSScriptRoot 'init.sh'
+$agentInstructionFiles = @(
+    (Join-Path $repoRoot 'AGENTS.md'),
+    (Join-Path $repoRoot 'CLAUDE.md')
+)
 
 $replacements = [ordered]@{
     '__ProjectName__'      = $ProjectName
@@ -147,6 +152,17 @@ $replacements = [ordered]@{
     '__GitHubOwner__'      = $GitHubOwner
     '__Description__'      = $Description
     '__Year__'             = "$Year"
+}
+
+# Persistent agent instructions are executable guidance for later coding agents,
+# not project metadata. Only validated identifier-shaped values may enter them;
+# free-form author/email/description values remain data in their intended files.
+$agentInstructionReplacements = [ordered]@{
+    '__ProjectName__' = $ProjectName
+    '__PackageName__' = $PackageName
+    '__Group__'       = $Group
+    '__GitHubOwner__' = $GitHubOwner
+    '__Year__'        = "$Year"
 }
 
 # Values written into Kotlin-script / TOML files sit inside double-quoted strings.
@@ -223,10 +239,14 @@ foreach ($file in $files) {
     if ($binaryExtensions -contains $file.Extension) { continue }
     $text = [System.IO.File]::ReadAllText($file.FullName)
     $new = $text
-    $map = switch ($file.Extension) {
-        '.kts' { $kotlinReplacements; break }
-        '.toml' { $tomlReplacements; break }
-        default { $replacements }
+    if ($agentInstructionFiles -contains $file.FullName) {
+        $map = $agentInstructionReplacements
+    } else {
+        $map = switch ($file.Extension) {
+            '.kts' { $kotlinReplacements; break }
+            '.toml' { $tomlReplacements; break }
+            default { $replacements }
+        }
     }
     foreach ($key in $map.Keys) {
         $new = $new.Replace($key, $map[$key])

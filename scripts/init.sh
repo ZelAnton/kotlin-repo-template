@@ -18,7 +18,8 @@
 # result always builds. Author/email/description must be single-line text without
 # control characters. GitHub owner is 1-39 letters/digits with interior hyphens;
 # group is a dot-separated identifier using letters/digits/underscores/hyphens.
-# Quotes, backslashes, and dollar signs remain supported and are context-encoded.
+# Quotes, backslashes, and dollar signs remain supported and are context-encoded;
+# free-form metadata is never inserted into AGENTS.md or CLAUDE.md.
 # Edit LICENSE / build.gradle.kts afterwards to refine the generated metadata.
 
 set -euo pipefail
@@ -239,11 +240,6 @@ while IFS= read -r -d '' file; do
   case "$file" in
     *.jar|*.png|*.jpg|*.gif|*.ico|*.zip) continue ;;
   esac
-  case "$file" in
-    *.kts)  p=$project_k; g=$group_k; a=$author_k; ae=$author_email_k; o=$owner_k; d=$desc_k; y=$year_k ;;
-    *.toml) p=$project_t; g=$group_t; a=$author_t; ae=$author_email_t; o=$owner_t; d=$desc_t; y=$year_t ;;
-    *)      p=$project_name; g=$group; a=$author; ae=$author_email; o=$github_owner; d=$description; y=$year ;;
-  esac
   # Preserve trailing newlines: append a sentinel before capture, strip it after.
   if ! content="$(cat "$file" || exit 1; printf x)"; then
     rm -f "$content_files"
@@ -251,16 +247,35 @@ while IFS= read -r -d '' file; do
   fi
   content="${content%x}"
   orig="$content"
-  content="${content//__ProjectName__/$p}"
-  content="${content//__PackageName__/$package_name}"
-  content="${content//__Group__/$g}"
-  content="${content//__AuthorBase64__/$author_b64}"
-  content="${content//__AuthorEmailBase64__/$author_email_b64}"
-  content="${content//__Author__/$a}"
-  content="${content//__AuthorEmail__/$ae}"
-  content="${content//__GitHubOwner__/$o}"
-  content="${content//__Description__/$d}"
-  content="${content//__Year__/$y}"
+  case "$file" in
+    "$repo_root/AGENTS.md"|"$repo_root/CLAUDE.md")
+      # Persistent agent instructions are executable guidance for later coding
+      # agents. Only validated identifier-shaped values may enter them; free-form
+      # author/email/description metadata stays in its intended data files.
+      content="${content//__ProjectName__/$project_name}"
+      content="${content//__PackageName__/$package_name}"
+      content="${content//__Group__/$group}"
+      content="${content//__GitHubOwner__/$github_owner}"
+      content="${content//__Year__/$year}"
+      ;;
+    *)
+      case "$file" in
+        *.kts)  p=$project_k; g=$group_k; a=$author_k; ae=$author_email_k; o=$owner_k; d=$desc_k; y=$year_k ;;
+        *.toml) p=$project_t; g=$group_t; a=$author_t; ae=$author_email_t; o=$owner_t; d=$desc_t; y=$year_t ;;
+        *)      p=$project_name; g=$group; a=$author; ae=$author_email; o=$github_owner; d=$description; y=$year ;;
+      esac
+      content="${content//__ProjectName__/$p}"
+      content="${content//__PackageName__/$package_name}"
+      content="${content//__Group__/$g}"
+      content="${content//__AuthorBase64__/$author_b64}"
+      content="${content//__AuthorEmailBase64__/$author_email_b64}"
+      content="${content//__Author__/$a}"
+      content="${content//__AuthorEmail__/$ae}"
+      content="${content//__GitHubOwner__/$o}"
+      content="${content//__Description__/$d}"
+      content="${content//__Year__/$y}"
+      ;;
+  esac
   if [ "$content" != "$orig" ]; then
     printf '%s' "$content" > "$file"
     changed=$((changed + 1))

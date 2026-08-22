@@ -4,10 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 > This is the Kotlin sibling of `cSharp-repo-template` / `fSharp-repo-template` /
 > `rust-repo-template`, scaffolded by mirroring those and adapting for Kotlin +
-> Gradle. It is a **token template**: `__ProjectName__`, `__PackageName__`,
-> `__Group__`, `__Author__`, `__AuthorEmail__`, `__GitHubOwner__`,
-> `__Description__`, and `__Year__` are stamped in by `scripts/init.ps1` (or the
-> POSIX `scripts/init.sh`). Read
+> Gradle. It is a **token template**: the initializers stamp validated
+> project/package identifiers used by these instructions, but never insert
+> free-form author, email, or description metadata into agent-instruction
+> Markdown. Read
 > [TEMPLATE.md](TEMPLATE.md) and [AGENTS.md](AGENTS.md) for the full layout and
 > the enforced conventions; the Kotlin-specific deviations are summarised in
 > TEMPLATE.md.

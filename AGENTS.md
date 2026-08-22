@@ -4,10 +4,10 @@ Conventions and guardrails for AI coding agents working in this repository. This
 is the canonical, detailed reference; [CLAUDE.md](CLAUDE.md) is a shorter pointer
 to it.
 
-> **Template note:** this file ships with placeholder tokens (`__ProjectName__`,
-> `__PackageName__`, `__Group__`, `__Author__`, `__AuthorEmail__`,
-> `__GitHubOwner__`, `__Description__`, `__Year__`) that `scripts/init.ps1`
-> stamps in. After initialization, fill the **Project** section below.
+> **Template note:** the initializers stamp validated project/package identifiers
+> used by these instructions, but never insert free-form author, email, or
+> description metadata into agent-instruction Markdown. After initialization,
+> fill the **Project** section below.
 
 ## Agent instructions are local-only in this (generated) repo
 
