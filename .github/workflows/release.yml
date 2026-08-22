@@ -233,6 +233,8 @@ jobs:
 
       # Release notes: prefer the curated CHANGELOG.md [Unreleased] section;
       # fall back to git-cliff over commits since the last tag if it's empty.
+      # The assembled file is persisted into the versioned changelog entry below,
+      # so a same-version resume never needs output from a skipped git-cliff step.
       - name: Extract changelog entry
         id: changelog
         env:
@@ -246,6 +248,7 @@ jobs:
             notes=$(awk -v version="$VERSION" '
               index($0, "## [" version "]") == 1 { f=1; next }
               /^## \[/ { if (f) exit }
+              /^\[[^]]+\]:[[:space:]]/ { if (f) exit }
               f
             ' CHANGELOG.md)
           else
@@ -322,6 +325,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           TAG: ${{ steps.version.outputs.tag }}
           PREV_TAG: v${{ steps.version.outputs.current }}
+          NOTES_FILE: ${{ steps.notes.outputs.path }}
         run: |
           set -euo pipefail
           python3 <<'PY'
@@ -339,15 +343,30 @@ jobs:
 
           path = pathlib.Path("CHANGELOG.md")
           text = path.read_text()
+          notes_path = pathlib.Path(os.environ["NOTES_FILE"])
+          release_notes = notes_path.read_text().strip()
+          if not release_notes:
+              print("::error::Assembled release notes are empty", file=sys.stderr)
+              sys.exit(1)
 
-          new_unreleased = (
+          replacement = (
               "## [Unreleased]\n\n"
               "### Added\n-\n\n"
               "### Changed\n-\n\n"
               "### Fixed\n-\n\n"
-              f"## [{version}] - {date}"
+              f"## [{version}] - {date}\n\n"
+              f"{release_notes}\n"
           )
-          text, n = re.subn(r"^## \[Unreleased\]$", new_unreleased, text, count=1, flags=re.M)
+          # Replace the whole Unreleased section, but leave reference links and
+          # older version sections in place. The exact notes sent to GitHub are
+          # thereby available when a later run resumes this tagged version.
+          text, n = re.subn(
+              r"^## \[Unreleased\]\n.*?(?=^## \[|^\[[^]]+\]:|\Z)",
+              replacement,
+              text,
+              count=1,
+              flags=re.M | re.S,
+          )
           if n != 1:
               print("::error::Could not find '## [Unreleased]' header in CHANGELOG.md", file=sys.stderr)
               sys.exit(1)

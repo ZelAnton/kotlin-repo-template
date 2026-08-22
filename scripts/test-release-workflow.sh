@@ -38,5 +38,64 @@ grep -qF 'gh release view "$LATEST_TAG"' "$workflow" || fail "rerun release look
 grep -qF 'Resuming the exact tagged version' "$workflow" || fail "same-version resume path is missing"
 grep -qF 'bash scripts/check-central-portal-duplicate.sh' "$workflow" || fail "exact Central duplicate matcher is not used"
 grep -qF 'DeploymentValidation.PUBLISHED' "$repo_root/build.gradle.kts" || fail "Central publication validation is missing"
+grep -qF 'NOTES_FILE: ${{ steps.notes.outputs.path }}' "$workflow" || fail "promoted release notes are not persisted"
+grep -qF 'pathlib.Path(os.environ["NOTES_FILE"])' "$workflow" || fail "promotion does not read the assembled notes"
+grep -qF 'steps.version.outputs.resume != '\''true'\'' && steps.changelog.outputs.has_manual == '\''false'\''' "$workflow" || fail "resume incorrectly runs git-cliff"
 
-echo "Release workflow checks passed: exact duplicate coordinate, same-version resume, and publication ordering."
+# Execute the workflow's real promotion block against both kinds of assembled
+# notes, then run the same version-section extraction used by a resume. This
+# catches regressions where manual notes or git-cliff fallback notes disappear
+# from the tagged changelog, or where resume falls back to skipped-step output.
+temp_dir=$(mktemp -d)
+cleanup() {
+  rm -rf "$temp_dir"
+}
+trap cleanup EXIT
+
+promotion_script="$temp_dir/promote.py"
+awk '
+  /python3 <<'"'"'PY'"'"'/ { capture=1; next }
+  capture && /^[[:space:]]*PY$/ { exit }
+  capture { sub(/^          /, ""); print }
+' "$workflow" > "$promotion_script"
+
+run_resume_case() {
+  local case_name=$1
+  local version=$2
+  local previous=$3
+  local notes=$4
+  local case_dir="$temp_dir/$case_name"
+  mkdir -p "$case_dir"
+  cat > "$case_dir/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## [Unreleased]
+
+### Added
+- original placeholder
+
+[Unreleased]: https://github.com/__GitHubOwner__/__ProjectName__/commits/main
+EOF
+  printf '%s\n' "$notes" > "$case_dir/release-notes.md"
+  (
+    cd "$case_dir"
+    VERSION="$version" TAG="v$version" PREV_TAG="v$previous" \
+      NOTES_FILE="$case_dir/release-notes.md" python3 "$promotion_script"
+  ) || fail "$case_name promotion failed"
+
+  grep -qF "## [$version] - " "$case_dir/CHANGELOG.md" || fail "$case_name version entry is missing"
+  grep -qF -- "$notes" "$case_dir/CHANGELOG.md" || fail "$case_name notes were not persisted"
+
+  resumed_notes=$(awk -v version="$version" '
+    index($0, "## [" version "]") == 1 { f=1; next }
+    /^## \[/ { if (f) exit }
+    /^\[[^]]+\]:[[:space:]]/ { if (f) exit }
+    f
+  ' "$case_dir/CHANGELOG.md")
+  printf '%s\n' "$resumed_notes" | grep -qF -- "$notes" || fail "$case_name resume cannot recover its notes"
+}
+
+run_resume_case manual 1.2.3 1.2.2 $'### Added\n\n- manually curated release note'
+run_resume_case fallback 1.2.4 1.2.3 $'### Changed\n\n- generated fallback release note'
+
+echo "Release workflow checks passed: exact duplicate coordinate, same-version resume with manual/fallback notes, and publication ordering."
