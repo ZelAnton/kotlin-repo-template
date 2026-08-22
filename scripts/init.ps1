@@ -203,10 +203,17 @@ Write-Host "    Updated contents in $contentChanged file(s)." -ForegroundColor D
 #    path matching its `package` declaration.
 foreach ($dir in $packageDirs) {
         $dest = Join-Path $dir.Parent.FullName $pkgRelPath
+        if (Test-Path -LiteralPath $dest) {
+            throw "Refusing to overwrite existing destination '$dest' while moving package '$($dir.FullName)'."
+        }
         New-Item -ItemType Directory -Path (Split-Path -Parent $dest) -Force | Out-Null
-        Move-Item -LiteralPath $dir.FullName -Destination $dest
+        Move-Item -LiteralPath $dir.FullName -Destination $dest -ErrorAction Stop
         if (Test-Path -LiteralPath $dir.FullName) {
             throw "Move reported success but source directory '$($dir.FullName)' still exists."
+        }
+        $unexpectedNestedPath = Join-Path $dest (Split-Path -Leaf $dir.FullName)
+        if (Test-Path -LiteralPath $unexpectedNestedPath) {
+            throw "Package move placed the source below an existing destination '$dest'."
         }
         $relParent = $dir.Parent.FullName.Substring($repoRoot.Length).TrimStart('\', '/')
         Write-Host "    Moved $relParent/__PackageName__ -> $relParent/$($PackageName.Replace('.', '/'))" -ForegroundColor DarkGray

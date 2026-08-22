@@ -15,5 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `scripts/check-env.sh` now rejects unknown and extra arguments instead of silently ignoring them.
+- Package migration now fails closed when a destination already exists, preserving the existing destination file.
 
 [Unreleased]: https://github.com/__GitHubOwner__/__ProjectName__/commits/main
