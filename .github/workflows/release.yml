@@ -400,10 +400,25 @@ jobs:
       # nothing on the remote, so a fresh re-run starts clean.
       - name: Commit and tag the release (local only)
         if: steps.version.outputs.resume != 'true'
+        env:
+          RELEASE_AUTHOR_NAME_B64: "__AuthorBase64__"
+          RELEASE_AUTHOR_EMAIL_B64: "__AuthorEmailBase64__"
         run: |
           set -euo pipefail
-          git config user.name "__Author__"
-          git config user.email "__AuthorEmail__"
+          python3 <<'PY'
+          import base64
+          import os
+          import subprocess
+
+          def decode_metadata(name):
+              encoded = os.environ[name]
+              return base64.b64decode(encoded, validate=True).decode("utf-8")
+
+          author_name = decode_metadata("RELEASE_AUTHOR_NAME_B64")
+          author_email = decode_metadata("RELEASE_AUTHOR_EMAIL_B64")
+          subprocess.run(["git", "config", "user.name", author_name], check=True)
+          subprocess.run(["git", "config", "user.email", author_email], check=True)
+          PY
           git add CHANGELOG.md
           git commit -m "Release ${{ steps.version.outputs.tag }}"
           git tag "${{ steps.version.outputs.tag }}"

@@ -84,6 +84,101 @@ run_success_case() {
   cmp -s "$expected_settings" "$case_dir/.claude/settings.json" || die "$shell_name clean activation changed settings contents"
 }
 
+assert_metadata_success_tree() {
+  local case_dir="$1"
+  local author="$2"
+  local description="$3"
+  local github_owner="$4"
+  local author_email="$5"
+  local author_b64
+  local author_email_b64
+
+  author_b64="$(printf '%s' "$author" | base64 | tr -d '\r\n')"
+  author_email_b64="$(printf '%s' "$author_email" | base64 | tr -d '\r\n')"
+
+  grep -Fq "$author" "$case_dir/LICENSE" || die "initializer did not preserve readable author text"
+  grep -Fq "$description" "$case_dir/README.md" || die "initializer did not preserve readable description text"
+  grep -Fq 'name = "O\"Reilly \$HOME \\ docs & tools"' "$case_dir/build.gradle.kts" || die "initializer did not Kotlin-escape author metadata"
+  grep -Fq 'description = "Toolkit \"quoted\" \\ path \$HOME & more"' "$case_dir/build.gradle.kts" || die "initializer did not Kotlin-escape description metadata"
+  grep -Fq "https://github.com/$github_owner/nested-check" "$case_dir/build.gradle.kts" || die "initializer did not preserve the boundary GitHub owner"
+  grep -Fq "RELEASE_AUTHOR_NAME_B64: \"$author_b64\"" "$case_dir/.github/workflows/release.yml" || die "initializer did not encode workflow author metadata"
+  grep -Fq "RELEASE_AUTHOR_EMAIL_B64: \"$author_email_b64\"" "$case_dir/.github/workflows/release.yml" || die "initializer did not encode workflow email metadata"
+  ! grep -Fq "$author" "$case_dir/.github/workflows/release.yml" || die "workflow contains raw executable-context author metadata"
+  ! grep -Fq '__AuthorBase64__' "$case_dir/.github/workflows/release.yml" || die "workflow retained the author base64 placeholder"
+  ! grep -Fq '__AuthorEmailBase64__' "$case_dir/.github/workflows/release.yml" || die "workflow retained the author email base64 placeholder"
+}
+
+run_metadata_success_case() {
+  local shell_name="$1"
+  local case_dir="$test_root/metadata-success-$shell_name"
+  local author='O"Reilly $HOME \ docs & tools'
+  local description='Toolkit "quoted" \ path $HOME & more'
+  local github_owner='a12345678901234567890123456789012345678'
+  local author_email='release+ci@example.invalid'
+
+  [ "${#github_owner}" -eq 39 ] || die "GitHub-owner boundary fixture is not 39 characters"
+  copy_template "$case_dir"
+
+  if [ "$shell_name" = bash ]; then
+    bash "$case_dir/scripts/init.sh" --project-name nested-check --package-name "$package_name" \
+      --author "$author" --author-email "$author_email" --github-owner "$github_owner" \
+      --description "$description" --keep-script
+  else
+    "$pwsh_command" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "$(to_native_path "$case_dir/scripts/init.ps1")" \
+      -ProjectName nested-check -PackageName "$package_name" -Author "$author" \
+      -AuthorEmail "$author_email" -GitHubOwner "$github_owner" -Description "$description" -KeepScript
+  fi
+
+  assert_metadata_success_tree "$case_dir" "$author" "$description" "$github_owner" "$author_email"
+}
+
+assert_metadata_failure_tree() {
+  local case_dir="$1"
+  local case_name="$2"
+
+  [ -d "$case_dir/src/main/kotlin/$placeholder" ] || die "$case_name moved the source package before rejecting metadata"
+  [ ! -e "$case_dir/src/main/kotlin/com/example/nested" ] || die "$case_name created a package destination before rejecting metadata"
+  [ -f "$case_dir/TEMPLATE.md" ] || die "$case_name removed TEMPLATE.md before rejecting metadata"
+  [ -f "$case_dir/.claude/settings.json.template" ] || die "$case_name activated settings before rejecting metadata"
+  [ ! -e "$case_dir/.claude/settings.json" ] || die "$case_name created settings before rejecting metadata"
+  grep -Fq "$project_placeholder" "$case_dir/README.md" || die "$case_name partially replaced file contents"
+}
+
+run_metadata_failure_case() {
+  local shell_name="$1"
+  local case_name="$2"
+  local option_name="$3"
+  local value="$4"
+  local expected_error="$5"
+  local case_dir="$test_root/metadata-failure-$shell_name-$case_name"
+  local output
+  local ps_parameter
+
+  copy_template "$case_dir"
+  case "$option_name" in
+    --author) ps_parameter=-Author ;;
+    --description) ps_parameter=-Description ;;
+    --github-owner) ps_parameter=-GitHubOwner ;;
+    *) die "unsupported metadata failure option '$option_name'" ;;
+  esac
+
+  if [ "$shell_name" = bash ]; then
+    if output="$(bash "$case_dir/scripts/init.sh" --project-name nested-check --package-name "$package_name" \
+      "$option_name" "$value" --keep-script 2>&1)"; then
+      die "POSIX initializer accepted unsafe metadata for $case_name"
+    fi
+  else
+    if output="$("$pwsh_command" -NoLogo -NoProfile -ExecutionPolicy Bypass \
+      -File "$(to_native_path "$case_dir/scripts/init.ps1")" -ProjectName nested-check \
+      -PackageName "$package_name" "$ps_parameter" "$value" -KeepScript 2>&1)"; then
+      die "PowerShell initializer accepted unsafe metadata for $case_name"
+    fi
+  fi
+
+  printf '%s\n' "$output" | grep -Fqi "$expected_error" || die "$shell_name $case_name error did not explain the metadata contract"
+  assert_metadata_failure_tree "$case_dir" "$shell_name $case_name"
+}
+
 assert_failure_tree() {
   local case_dir="$1"
   local main_source="$case_dir/src/main/kotlin/$placeholder"
@@ -195,10 +290,22 @@ run_settings_conflict_case() {
 
 run_success_case bash
 run_success_case powershell
+run_metadata_success_case bash
+run_metadata_success_case powershell
+run_metadata_failure_case bash author-newline --author $'safe\nrun: injected' 'single line'
+run_metadata_failure_case powershell author-newline --author $'safe\nrun: injected' 'single line'
+run_metadata_failure_case bash description-tab --description $'safe\tinjected' 'single line'
+run_metadata_failure_case powershell description-tab --description $'safe\tinjected' 'single line'
+run_metadata_failure_case bash description-c1 --description $'safe\u009binjected' 'single line'
+run_metadata_failure_case powershell description-c1 --description $'safe\u009binjected' 'single line'
+run_metadata_failure_case bash owner-quote --github-owner 'acme"owner' 'github-owner'
+run_metadata_failure_case powershell owner-quote --github-owner 'acme"owner' 'GitHubOwner'
+run_metadata_failure_case bash owner-too-long --github-owner 'a123456789012345678901234567890123456789' 'github-owner'
+run_metadata_failure_case powershell owner-too-long --github-owner 'a123456789012345678901234567890123456789' 'GitHubOwner'
 run_failure_case bash
 run_failure_case powershell
 run_conflict_case bash
 run_conflict_case powershell
 run_settings_conflict_case bash
 run_settings_conflict_case powershell
-echo "Initializer checks passed for POSIX and PowerShell (clean transfer, nested validation, and settings/package conflict protection)."
+echo "Initializer checks passed for POSIX and PowerShell (metadata encoding/rejection, clean transfer, nested validation, and settings/package conflict protection)."

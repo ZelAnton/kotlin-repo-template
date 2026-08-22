@@ -31,19 +31,25 @@
 
 .PARAMETER Group
     Maven group id (e.g. com.acme). Defaults to "io.github.<github-owner>".
+    Uses dot-separated letters, digits, underscores, or interior hyphens.
 
 .PARAMETER Author
     Author for LICENSE / POM. Defaults to `git config user.name`, else "Your Name".
+    Must be a single line without control characters. Quotes, backslashes, and
+    dollar signs are preserved and encoded for generated source/workflow contexts.
 
 .PARAMETER AuthorEmail
     Author email (release-commit identity in release.yml). Defaults to
-    `git config user.email`, else "you@example.com".
+    `git config user.email`, else "you@example.com". Must be a single line
+    without control characters.
 
 .PARAMETER GitHubOwner
-    GitHub owner/org used in repository URLs. Defaults to "your-org".
+    GitHub owner/org used in repository URLs. Defaults to "your-org". Uses the
+    GitHub login alphabet: 1-39 ASCII letters/digits with single interior hyphens.
 
 .PARAMETER Description
-    Short project description. Defaults to "TODO: project description".
+    Short project description. Defaults to "TODO: project description". Must be
+    a single line without control characters; punctuation is preserved.
 
 .PARAMETER Year
     Copyright year. Defaults to the current year.
@@ -87,6 +93,23 @@ if (-not $AuthorEmail) {
 if (-not $GitHubOwner) { $GitHubOwner = 'your-org' }
 if (-not $Description) { $Description = 'TODO: project description' }
 
+# Free-form metadata is copied to human-readable files and source/configuration
+# strings. Unicode control characters (Cc) and logical line separators cannot be
+# represented safely in all contexts, so reject them before changing any files.
+function Assert-SingleLineMetadata([string]$parameterName, [string]$value) {
+    if ($value -match '[\p{Cc}\u2028\u2029]') {
+        throw "Invalid -$parameterName value. Use a single line without control characters."
+    }
+}
+
+Assert-SingleLineMetadata 'Author' $Author
+Assert-SingleLineMetadata 'AuthorEmail' $AuthorEmail
+Assert-SingleLineMetadata 'Description' $Description
+
+if ($GitHubOwner -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$') {
+    throw "Invalid -GitHubOwner '$GitHubOwner'. Use 1-39 letters or digits with single hyphens only between characters (e.g. acme-tools)."
+}
+
 # Sanitize a string into a single legal lowercase package segment.
 function ConvertTo-PackageSegment([string]$value) {
     $seg = ($value.ToLowerInvariant() -replace '[^a-z0-9]', '')
@@ -97,6 +120,10 @@ function ConvertTo-PackageSegment([string]$value) {
 
 if (-not $Group) { $Group = "io.github.$(ConvertTo-PackageSegment $GitHubOwner)" }
 if (-not $PackageName) { $PackageName = "$Group.$(ConvertTo-PackageSegment $ProjectName)" }
+
+if ($Group -notmatch '^[A-Za-z0-9_]+(?:[.-][A-Za-z0-9_]+)*$') {
+    throw "Invalid -Group '$Group'. Use dot-separated letters, digits, underscores, or interior hyphens (e.g. com.acme-tools)."
+}
 
 # A package is dot-separated identifiers: [a-z_][a-z0-9_]* per segment.
 foreach ($seg in ($PackageName -split '\.')) {
@@ -110,24 +137,26 @@ $selfPath = $PSCommandPath
 $siblingSh = Join-Path $PSScriptRoot 'init.sh'
 
 $replacements = [ordered]@{
-    '__ProjectName__' = $ProjectName
-    '__PackageName__' = $PackageName
-    '__Group__'       = $Group
-    '__Author__'      = $Author
-    '__AuthorEmail__' = $AuthorEmail
-    '__GitHubOwner__' = $GitHubOwner
-    '__Description__'  = $Description
-    '__Year__'        = "$Year"
+    '__ProjectName__'      = $ProjectName
+    '__PackageName__'      = $PackageName
+    '__Group__'            = $Group
+    '__Author__'           = $Author
+    '__AuthorEmail__'      = $AuthorEmail
+    '__AuthorBase64__'     = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Author))
+    '__AuthorEmailBase64__' = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($AuthorEmail))
+    '__GitHubOwner__'      = $GitHubOwner
+    '__Description__'      = $Description
+    '__Year__'             = "$Year"
 }
 
-# Values written into Kotlin-script / TOML files sit inside double-quoted strings
-# (rootProject.name, group, the POM fields). A literal " or \ would break the
-# script, so escape them for those targets.
-$escapedReplacements = [ordered]@{}
+# Values written into Kotlin-script / TOML files sit inside double-quoted strings.
+# Kotlin additionally treats $ as string-template syntax, while TOML does not.
+$kotlinReplacements = [ordered]@{}
+$tomlReplacements = [ordered]@{}
 foreach ($key in $replacements.Keys) {
-    $escapedReplacements[$key] = $replacements[$key].Replace('\', '\\').Replace('"', '\"')
+    $tomlReplacements[$key] = $replacements[$key].Replace('\', '\\').Replace('"', '\"')
+    $kotlinReplacements[$key] = $tomlReplacements[$key].Replace('$', '\$')
 }
-$escapedFileExtensions = @('.kts', '.toml')
 
 $excludedDirs = @('.git', '.jj', 'build', '.gradle', '.idea')
 
@@ -194,7 +223,11 @@ foreach ($file in $files) {
     if ($binaryExtensions -contains $file.Extension) { continue }
     $text = [System.IO.File]::ReadAllText($file.FullName)
     $new = $text
-    $map = if ($escapedFileExtensions -contains $file.Extension) { $escapedReplacements } else { $replacements }
+    $map = switch ($file.Extension) {
+        '.kts' { $kotlinReplacements; break }
+        '.toml' { $tomlReplacements; break }
+        default { $replacements }
+    }
     foreach ($key in $map.Keys) {
         $new = $new.Replace($key, $map[$key])
     }

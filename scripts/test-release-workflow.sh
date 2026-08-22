@@ -42,6 +42,13 @@ grep -qF 'DeploymentValidation.PUBLISHED' "$repo_root/build.gradle.kts" || fail 
 grep -qF 'NOTES_FILE: ${{ steps.notes.outputs.path }}' "$workflow" || fail "promoted release notes are not persisted"
 grep -qF 'pathlib.Path(os.environ["NOTES_FILE"])' "$workflow" || fail "promotion does not read the assembled notes"
 grep -qF 'steps.version.outputs.resume != '\''true'\'' && steps.changelog.outputs.has_manual == '\''false'\''' "$workflow" || fail "resume incorrectly runs git-cliff"
+grep -qF 'RELEASE_AUTHOR_NAME_B64: "__AuthorBase64__"' "$workflow" || fail "release author is not carried as encoded data"
+grep -qF 'RELEASE_AUTHOR_EMAIL_B64: "__AuthorEmailBase64__"' "$workflow" || fail "release author email is not carried as encoded data"
+grep -qF 'base64.b64decode(encoded, validate=True).decode("utf-8")' "$workflow" || fail "release identity decoding is not strict"
+grep -qF 'subprocess.run(["git", "config", "user.name", author_name], check=True)' "$workflow" || fail "release author is not passed to git as argv data"
+grep -qF 'subprocess.run(["git", "config", "user.email", author_email], check=True)' "$workflow" || fail "release author email is not passed to git as argv data"
+! grep -qF 'git config user.name "__Author__"' "$workflow" || fail "release workflow still interpolates raw author shell source"
+! grep -qF 'git config user.email "__AuthorEmail__"' "$workflow" || fail "release workflow still interpolates raw author email shell source"
 
 # Execute the workflow's real version-detection block against prerelease,
 # stable, resume, and first-release tag sets. This keeps the test aligned with
@@ -51,6 +58,32 @@ cleanup() {
   rm -rf "$temp_dir"
 }
 trap cleanup EXIT
+
+# Execute the workflow's real identity-decoding block with shell metacharacters.
+# The exact values must reach git config as argv data without executing any part.
+identity_script="$temp_dir/configure-release-identity.py"
+awk '
+  /^      - name: Commit and tag the release \(local only\)$/ { in_step=1; next }
+  in_step && /python3 <<'"'"'PY'"'"'/ { capture=1; next }
+  capture && /^[[:space:]]*PY$/ { exit }
+  capture { sub(/^          /, ""); print }
+' "$workflow" > "$identity_script"
+
+identity_case="$temp_dir/identity"
+mkdir -p "$identity_case"
+git -C "$identity_case" init -q
+dangerous_author='O"Reilly $(touch injected-author) `touch injected-backtick` \ path'
+dangerous_email='release+"quoted"\path@example.invalid'
+author_b64=$(printf '%s' "$dangerous_author" | base64 | tr -d '\r\n')
+email_b64=$(printf '%s' "$dangerous_email" | base64 | tr -d '\r\n')
+(
+  cd "$identity_case"
+  RELEASE_AUTHOR_NAME_B64="$author_b64" RELEASE_AUTHOR_EMAIL_B64="$email_b64" \
+    python3 "$identity_script"
+) || fail "release identity decoding block failed"
+[[ "$(git -C "$identity_case" config --get user.name)" == "$dangerous_author" ]] || fail "release author changed while crossing the workflow boundary"
+[[ "$(git -C "$identity_case" config --get user.email)" == "$dangerous_email" ]] || fail "release author email changed while crossing the workflow boundary"
+[[ ! -e "$identity_case/injected-author" && ! -e "$identity_case/injected-backtick" ]] || fail "release identity metadata executed shell content"
 
 version_script="$temp_dir/determine-version.sh"
 awk '
