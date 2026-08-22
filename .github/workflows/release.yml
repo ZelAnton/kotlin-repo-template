@@ -1,6 +1,6 @@
 name: Release
 
-# Manual, opt-in publish to Maven Central via the Sonatype Central Portal, with
+# Manual, opt-in release to Maven Central via the Sonatype Central Portal, with
 # release notes sourced from CHANGELOG.md.
 #
 # Required repository secrets (see TEMPLATE.md "Publishing to Maven Central"):
@@ -18,9 +18,9 @@ name: Release
 # Everything before it is cheap and reversible (build/test/validate-publication,
 # plus a LOCAL commit+tag that is not yet pushed); everything after it (push the
 # commit+tag to main, create the GitHub Release) is reversible/recreatable and is
-# made idempotent + retried. A failure before the pivot leaves no trace on the
-# remote or registry — just re-run. A failure after the pivot is recoverable by
-# re-run, EXCEPT once the tag is on main (see the Release step's note).
+# made idempotent + retried. A failure before the pivot leaves no VCS/GitHub trace;
+# just re-run. A failure after the pivot is recoverable by re-run, EXCEPT once the
+# tag is on main (see the Release step's note).
 #
 # The "Push the release commit + tag" step pushes straight to main. If you
 # protect main with a rule that requires pull requests or status checks, that
@@ -344,17 +344,12 @@ jobs:
       # === PIVOT: the single irreversible step ===
       # Publishing to Maven Central cannot be undone (a released version can never be
       # re-pushed), so it is the pivot and every reversible action is ordered around
-      # it. It runs BEFORE the git push and the GitHub Release: if it fails, no
-      # tag/commit has reached the remote and no Release exists, so a re-run is safe
-      # and recomputes the SAME version (the latest tag has not moved). Retries
-      # absorb transient registry/network failures; a version already published
-      # upstream (a prior run that uploaded but failed before tagging) is treated as
-      # success so the run can carry on to tag/Release.
-      #
-      # NOTE: publishToMavenCentral uploads a *staging* deployment you release from
-      # the Central Portal UI (so re-staging is cheap). Swap for
-      # publishAndReleaseToMavenCentral to auto-release — which makes this step
-      # genuinely irreversible and makes the "already published" handling load-bearing.
+      # it. The Gradle publishing configuration auto-releases and waits for the
+      # deployment to reach PUBLISHED; the separate availability check below also
+      # waits for the exact POM to be consumable. Both run BEFORE the git push and the
+      # GitHub Release. If publication fails, no tag/commit has reached the remote
+      # and no Release exists, so a re-run recomputes the SAME version (the latest tag
+      # has not moved). Retries absorb transient registry/network failures.
       - name: Publish to Maven Central (irreversible pivot)
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
@@ -373,14 +368,12 @@ jobs:
               exit 0
             fi
             echo "::endgroup::"
-            # Narrowly treat "this version is already published" as success: a prior
-            # run uploaded it but failed before tagging, so re-running must converge,
-            # not loop. VERIFY this pattern against the actual Central Portal error
-            # text before relying on it — it must match the registry's real
-            # duplicate-version phrasing and must NOT match an unrelated "already
-            # exists" (matching too broadly would tag an unpublished version).
+            # Narrowly allow a duplicate-version retry to continue. The next step
+            # verifies the exact POM is available from Maven Central before any tag
+            # or GitHub Release is created, so an unrelated "already exists" message
+            # cannot create a release for an unpublished version.
             if grep -qiE 'already been (published|released)|version .*already (exists|published|released)' "$log"; then
-              echo "Version $VERSION already published upstream; treating as success."
+              echo "Version $VERSION may already be published upstream; verifying availability before continuing."
               exit 0
             fi
             if [ "$attempt" -lt 3 ]; then
@@ -389,15 +382,44 @@ jobs:
               sleep "$wait"
             fi
           done
-          echo "::error::Publish failed after 3 attempts. Nothing reached the remote and no Release was created — it is safe to re-run this workflow."
+          echo "::error::Publish failed after 3 attempts. No VCS/GitHub release was created."
+          echo "It is safe to re-run this workflow."
+          exit 1
+
+      # Central Portal can report PUBLISHED before its repository mirrors expose
+      # the files. Do not push the tag or create the GitHub Release until consumers
+      # can fetch this exact version. This also gates the duplicate-version retry
+      # path above: a matching error is not accepted without a real POM response.
+      - name: Verify Maven Central artifact is available (before VCS/GitHub release)
+        env:
+          GROUP: __Group__
+          ARTIFACT: __ProjectName__
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          group_path="${GROUP//./\/}"
+          pom_url="https://repo.maven.apache.org/maven2/${group_path}/${ARTIFACT}/${VERSION}/${ARTIFACT}-${VERSION}.pom"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --location --max-time 30 "$pom_url" -o /dev/null; then
+              echo "Maven Central exposes ${GROUP}:${ARTIFACT}:${VERSION}."
+              exit 0
+            fi
+            if [ "$attempt" -lt 60 ]; then
+              echo "Maven Central has not exposed ${GROUP}:${ARTIFACT}:${VERSION} yet; retrying in 30s."
+              echo "Availability check attempt $attempt/60."
+              sleep 30
+            fi
+          done
+          echo "::error::Maven Central did not expose ${GROUP}:${ARTIFACT}:${VERSION} within 30 minutes."
+          echo "No tag or GitHub Release will be created."
           exit 1
 
       # Reversible VCS write, AFTER the pivot. --atomic guarantees the branch and
       # tag move together (or neither does), so we never advance main while losing
       # the tag. If this is rejected (e.g. branch protection — see the checkout
       # note), the package is already on Maven Central; re-running recomputes the
-      # SAME version (the tag is not yet on the remote) and the "already published"
-      # handling makes the republish a no-op, so the re-run completes the release.
+      # SAME version (the tag is not yet on the remote), and the duplicate-version
+      # handling plus availability check makes the republish a no-op.
       - name: Push the release commit + tag (atomic)
         run: git push --atomic origin HEAD:refs/heads/main "${{ steps.version.outputs.tag }}"
 

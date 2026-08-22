@@ -1,3 +1,5 @@
+import com.vanniktech.maven.publish.DeploymentValidation
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.ktlint)
@@ -85,10 +87,12 @@ mavenPublishing {
     // ship real API docs, apply the Dokka plugin and call
     // `configure(KotlinJvm(javadocJar = JavadocJar.Dokka("dokkaHtml")))`.
 
-    // Upload to the Central Portal. `automaticRelease = false` uploads a staging
-    // deployment you release from the Portal UI; set it to true to auto-release
-    // once validation passes.
-    publishToMavenCentral(automaticRelease = false)
+    // Upload and release through the Central Portal, then wait until the deployment
+    // is PUBLISHED before the release workflow pushes its tag or creates a Release.
+    publishToMavenCentral(
+        automaticRelease = true,
+        validateDeployment = DeploymentValidation.PUBLISHED,
+    )
 
     // Central requires signed artifacts, but signing must NOT break key-free
     // builds: `publishToMavenLocal` (and any publish task) would otherwise fail
