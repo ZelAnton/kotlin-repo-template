@@ -13,7 +13,16 @@
 # Usage: bash ./scripts/check-env.sh
 
 set -euo pipefail
-case "${1:-}" in -h|--help) sed -n '2,13p' "$0"; exit 0 ;; esac
+case "$#" in
+  0) ;;
+  1)
+    case "$1" in
+      -h|--help) sed -n '2,13p' "$0"; exit 0 ;;
+      *) printf 'error: unknown argument: %s\n' "$1" >&2; exit 2 ;;
+    esac
+    ;;
+  *) printf 'error: unexpected arguments: %s\n' "$*" >&2; exit 2 ;;
+esac
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 
