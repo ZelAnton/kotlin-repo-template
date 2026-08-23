@@ -185,7 +185,12 @@ and untrack before the first commit.
   `./gradlew koverHtmlReport`.
 - **Dependency graph submission.** `.github/workflows/dependency-submission.yml`
   feeds the resolved Gradle graph to GitHub so Dependabot alerts cover transitive
-  dependencies too.
+  dependencies too. This needs the repository's **Dependency graph** enabled — on
+  by default for public repos, opt-in for private ones — otherwise every run
+  fails with *"The Dependency graph is disabled for this repository"*. Turn it on
+  under *Settings → Code security → Dependency graph*, or enable Dependabot
+  alerts (which switches the graph on as well):
+  `gh api -X PUT repos/OWNER/REPO/vulnerability-alerts`.
 
 ## Publishing to Maven Central
 

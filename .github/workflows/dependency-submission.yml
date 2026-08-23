@@ -3,6 +3,13 @@ name: Dependency submission
 # Submits the resolved Gradle dependency graph to GitHub's Dependency Graph, so
 # Dependabot security alerts cover transitive dependencies too (not just the
 # direct ones declared in gradle/libs.versions.toml).
+#
+# Prerequisite: the repository's Dependency graph feature must be enabled, or
+# every run fails with "The Dependency graph is disabled for this repository."
+# It is on by default for public repositories and opt-in for private ones:
+# Settings > Code security > Dependency graph, or enable Dependabot alerts
+# (which switches the graph on as well) with
+#   gh api -X PUT repos/OWNER/REPO/vulnerability-alerts
 
 on:
   push:
