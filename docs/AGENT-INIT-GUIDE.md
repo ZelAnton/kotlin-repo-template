@@ -96,12 +96,12 @@ Untrack them after init so they stay on disk but never reach that repo's remote.
 (This is about the **downstream** repo; the template repo itself keeps these
 tracked and shared.) `init` does **not** change tracking — this is a **by-hand
 step.** A `.gitignore` rule won't untrack already-committed files — add a
-local-only ignore (not pushed, honoured by `jj` too) and drop them from the
+local-only ignore (not pushed) and drop them from the
 index:
 
 ```sh
 printf '/CLAUDE.md\n/AGENTS.md\n' >> .git/info/exclude
-git rm --cached CLAUDE.md AGENTS.md          # jj: jj file untrack CLAUDE.md AGENTS.md
+git rm --cached CLAUDE.md AGENTS.md
 git commit -m "Keep agent instructions local"
 ```
 

@@ -28,7 +28,7 @@ it has not been done yet in this repo, do it **before the first push**:
 
   ```sh
   printf '/CLAUDE.md\n/AGENTS.md\n' >> .git/info/exclude
-  git rm --cached CLAUDE.md AGENTS.md          # jj: jj file untrack CLAUDE.md AGENTS.md
+  git rm --cached CLAUDE.md AGENTS.md
   ```
 
 - `.claude/` — the committed `.gitignore` force-ships `settings.json`
@@ -38,11 +38,10 @@ it has not been done yet in this repo, do it **before the first push**:
   ignores the whole directory) and untrack it:
 
   ```sh
-  git rm -r --cached .claude                   # jj: jj file untrack .claude
+  git rm -r --cached .claude
   ```
 
-`jj file untrack` only accepts already-ignored paths, so add the ignore rule
-first. Untracking stops these files going *forward* — a repo made via *Use this
+Untracking stops these files going *forward* — a repo made via *Use this
 template* still has them in its initial commit on the remote (they survive in
 history); for a clean slate, copy into a fresh `git init` and untrack before the
 first commit. To keep them shared instead, do nothing here.
@@ -174,37 +173,18 @@ transitive dependencies.
 
 ## Version control workflow
 
-Colocated git + [jujutsu (`jj`)](https://jj-vcs.github.io/jj/). Drive everything
-through `jj` (git writes can desync the jj working copy; if unavoidable, follow
-with `jj git import`).
+The repo uses Git directly. Do not initialize or colocate another version-control system in the working tree.
 
-**Evaluate each new prompt before editing** — classify the scope:
-
-| Signal in prompt | Category | Action |
-|---|---|---|
-| Same topic, refinement, follow-up of in-progress work | **Continuation** | Just work. jj auto-folds edits into the current change. |
-| Same change but goal has been refined or expanded | **Scope shift** | `jj describe -m "<refined summary>"`. **Don't** start a new change. |
-| Orthogonal topic, different area, "теперь сделай X" | **New work** | If current change is finished → `jj new -m "<summary>"` (descendant). If still in progress → `jj new @- -m "..."` (parallel sibling). |
-
-Reliable signals: word changes like "теперь" / "now" / "next" / "также сделай" / "and also" usually mean **new work** or **scope shift**. Imperative follow-ups inside the same scope ("исправь это", "fix this", "продолжи") mean **continuation**. When in doubt, ask the user.
-
-- **Describe early:** `jj describe -m "..."` at the start of work; fold small
-  follow-ups into the current change; re-`describe` on scope shift.
-- **Orthogonal work:** ask before splitting — `jj new -m "..."` (descendant) or
-  `jj new @- -m "..."` (parallel sibling).
-- **Sync only on the user's explicit `pull`/`push`/`sync`:** `jj git fetch`
-  (picks up merged PRs); rebase if upstream advanced
-  (`jj rebase -r @- -d main@origin`); put the work on a **feature bookmark** —
-  `jj bookmark create <topic> -r @` the first time (then
-  `jj bookmark move <topic> --to @`), `jj git push --allow-new -b <topic>`; open
-  a PR into `main` (`gh pr create --base main --head <topic> --fill`). `main`
-  advances only via merged PRs. **Never push without an explicit signal.**
-  *Fallback:* where `main` is unprotected, push it directly
-  (`jj bookmark move main --to @`; `jj git push -b main`); once PRs are required
-  this is rejected for everyone except an automated actor granted a bypass.
-- **Undo:** `jj undo`, `jj abandon <rev>`, `jj restore`, `jj op log` +
-  `jj op restore <op-id>`.
-- **Feature bookmark per PR is the unit of work** (short kebab-case topic).
-  Don't advance `main` locally to publish — it moves only via merged PRs and the
-  release workflow (which pushes its release commit + tag to `main` — as the
-  automated actor granted a bypass, or directly while `main` is unprotected).
+- **Sync only on the user's explicit `pull`/`push`/`sync`:** run `git fetch origin`,
+  rebase the feature branch onto `origin/main` when needed, push it with
+  `git push --set-upstream origin HEAD` on the first push, then open a pull request
+  into `main`. Never push without an explicit signal.
+  *Fallback:* where `main` is unprotected, `git push origin HEAD:main` remains
+  available; once pull requests are required this is rejected for everyone except
+  an automated actor granted a bypass.
+- **Undo deliberately:** use `git restore` for uncommitted changes, `git revert`
+  for published commits, and `git reflog` for recovery. Do not rewrite published
+  history without explicit approval.
+- **Feature branches are the unit of work** (short kebab-case topic per pull
+  request). Do not advance `main` locally to publish; it moves only through merged
+  pull requests and the release workflow.

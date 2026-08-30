@@ -87,9 +87,7 @@ tracking a file and (2) add a **local-only** ignore — `.git/info/exclude`, whi
 lives in your clone and is **never pushed** (unlike `.gitignore`, which is itself
 committed) — so it doesn't reappear as untracked and get re-added by accident.
 The trade-off: `.git/info/exclude` is per-clone, so a fresh clone re-tracks these
-files and you re-apply the steps. A colocated `jj` honours `.git/info/exclude`
-too, but `jj file untrack` only accepts a path that is *already* ignored — so the
-exclude (step 1) must come first.
+files and you re-apply the steps. The local exclude (step 1) must come first.
 
 ### `CLAUDE.md` and `AGENTS.md`
 
@@ -101,7 +99,7 @@ printf '/CLAUDE.md\n/AGENTS.md\n' >> .git/info/exclude
 # PowerShell: Add-Content .git/info/exclude '/CLAUDE.md', '/AGENTS.md'
 
 # 2) Stop tracking the committed copies (kept on disk), then commit the removal.
-git rm --cached CLAUDE.md AGENTS.md           # jj: jj file untrack CLAUDE.md AGENTS.md
+git rm --cached CLAUDE.md AGENTS.md
 git commit -m "Keep agent instructions local"
 ```
 
@@ -113,15 +111,14 @@ committed `.gitignore` already ignores everything under `.claude/` *except*
 force-ships** (`!.claude/settings.json`). A committed `.gitignore` negation
 outranks `.git/info/exclude`, so adding `/.claude/` to the exclude does nothing
 for those two files — they stay tracked, and after a bare `git rm --cached` they
-re-surface as untracked (and `jj file untrack` refuses them outright, since they
-aren't ignored).
+re-surface as untracked.
 
 To take `.claude/` fully local, **delete** the `!.claude/settings.json` and
 `!.claude/settings.json.template` lines from `.gitignore` (a committed edit;
 `.claude/*` then ignores the whole directory) and untrack the settings:
 
 ```sh
-git rm -r --cached .claude                    # jj: jj file untrack .claude
+git rm -r --cached .claude
 git commit -m "Stop sharing .claude settings"
 ```
 

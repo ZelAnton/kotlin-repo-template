@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 -
 
 ### Changed
--
+- The template and generated-repository guidance now use Git directly without secondary version-control metadata.
 
 ### Fixed
 - `scripts/check-env.sh` now rejects unknown and extra arguments instead of silently ignoring them.

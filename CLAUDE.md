@@ -150,26 +150,21 @@ section of [AGENTS.md](AGENTS.md).
 
 ## Version control workflow
 
-The repo is colocated git + [jujutsu (`jj`)](https://jj-vcs.github.io/jj/); use
-`jj`, not raw git.
+The repo uses Git directly. Do not initialize or colocate another version-control
+system in the working tree. Use a feature branch per pull request and Git commands.
 
-- **Describe early:** `jj describe -m "..."` when starting work. Fold small
-  follow-ups into the current change; re-`describe` if scope shifts.
-- **Orthogonal work:** ask before splitting — `jj new -m "..."` (descendant) or
-  `jj new @- -m "..."` (parallel sibling).
-- **Sync only on the user's explicit `pull`/`push`/`sync`:** `jj git fetch`
-  (picks up merged PRs); rebase if upstream advanced
-  (`jj rebase -r @- -d main@origin`); put the work on a **feature bookmark** —
-  `jj bookmark create <topic> -r @` the first time (then
-  `jj bookmark move <topic> --to @`), `jj git push --allow-new -b <topic>`; open
-  a PR into `main` (`gh pr create --base main --head <topic> --fill`). `main`
-  advances only via merged PRs. **Never push without an explicit signal.**
-  *Fallback:* where `main` is unprotected, push it directly
-  (`jj bookmark move main --to @`; `jj git push -b main`); once PRs are required
-  this is rejected for everyone except an automated actor granted a bypass.
-- **Undo via jj's safety net:** `jj undo`, `jj abandon <rev>`, `jj restore`,
-  `jj op log` + `jj op restore <op-id>`.
-- **Feature bookmark per PR is the unit of work** (short kebab-case topic).
-  Don't advance `main` locally to publish — it moves only via merged PRs and the
-  release workflow (which pushes its release commit + tag to `main` — as the
-  automated actor granted a bypass, or directly while `main` is unprotected).
+- **Inspect before editing:** run `git status --short --branch` and preserve existing work.
+- **Separate unrelated work:** ask before stashing or switching if the working tree is dirty.
+- **Sync only on the user's explicit `pull`/`push`/`sync`:** run `git fetch origin`,
+  rebase onto `origin/main` when needed, push the feature branch with `git push
+  --set-upstream origin HEAD` first, then open a PR into `main`. `main` advances
+  only via merged PRs. **Never push without an explicit signal.**
+  *Fallback:* where `main` is unprotected, `git push origin HEAD:main` remains
+  available; once PRs are required this is rejected for everyone except an
+  automated actor granted a bypass.
+- **Undo deliberately:** use `git restore` for uncommitted changes, `git revert`
+  for published commits, and `git reflog` for recovery. Do not rewrite published
+  history without explicit approval.
+- **Feature branches are the unit of work** (short kebab-case topic per pull
+  request). Do not advance `main` locally to publish; it moves only via merged
+  pull requests and the release workflow.
